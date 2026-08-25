@@ -34,7 +34,6 @@ def aktualizuj_litvinov():
                     if "VERVA" in r or "Verva" in r or "Litvínov" in r or "Litvinov" in r:
                         cisty = re.sub(r'<[^>]+>', ' ', r)
                         cisty = " ".join(cisty.split())
-                        print(f"Nalezen surovy radek: {cisty}") # Tady uvidíme v logu Renderu přesný text!
                         
                         matches = list(re.finditer(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cisty))
                         
@@ -65,6 +64,10 @@ def aktualizuj_litvinov():
             
         time.sleep(60)
 
+# Spuštění aktualizačního vlákna hned při startu (funguje na Renderu i lokálně)
+t = threading.Thread(target=aktualizuj_litvinov, daemon=True)
+t.start()
+
 @app.route("/")
 def domov():
     return "Litvinov Hokej Server běží!"
@@ -74,9 +77,4 @@ def get_litvinov():
     return litvinov_data
 
 if __name__ == "__main__":
-    t = threading.Thread(target=aktualizuj_litvinov, daemon=True)
-    t.start()
     app.run(host="0.0.0.0", port=5000, debug=False)
-else:
-    t = threading.Thread(target=aktualizuj_litvinov, daemon=True)
-    t.start()
