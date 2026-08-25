@@ -21,26 +21,26 @@ def aktualizuj_litvinov():
         try:
             print("Hledam zapas Litvinova...")
             url = "https://www.hokej.cz/tipsport-extraliga/zapasy"
-            headers = {"User-Agent": "Mozilla/5.0"}
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
             resp = requests.get(url, headers=headers)
+            
+            print(f"Status stahovani: {resp.status_code}")
             
             if resp.status_code == 200:
                 radecky = resp.text.split("</tr>")
                 nalezeno = False
                 
                 for r in radecky:
-                    # Hledáme klíčové slovo VERVA (bez diakritiky, spolehlivé)
-                    if "VERVA" in r or "Verva" in r:
+                    if "VERVA" in r or "Verva" in r or "Litvínov" in r or "Litvinov" in r:
                         cisty = re.sub(r'<[^>]+>', ' ', r)
                         cisty = " ".join(cisty.split())
+                        print(f"Nalezen surovy radek: {cisty}") # Tady uvidíme v logu Renderu přesný text!
                         
                         matches = list(re.finditer(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cisty))
                         
                         if matches:
                             m = matches[0]
                             den_cas = odstran_diakritiku(f"{m.group(1)} {m.group(2)} {m.group(3).replace('.', ':')}")
-                            
-                            # Domácí tým nastavíme napevno jako Litvinov
                             domaci = "Litvinov"
                             
                             m_end = matches[1].end() if len(matches) > 1 else m.end()
@@ -51,15 +51,14 @@ def aktualizuj_litvinov():
                             hoste_str = " ".join(h_slova[:2]) if len(h_slova) >= 2 else (" ".join(h_slova) if h_slova else "Souper")
                             hoste = odstran_diakritiku(hoste_str)
                             
-                            # Uložíme formát pro displej (3 řádky oddělené \n)
                             litvinov_data = f"{domaci}\n{den_cas}\n{hoste}"
+                            print(f"Uspesne nastaveno: {litvinov_data}")
                             nalezeno = True
                             break
                 
                 if not nalezeno:
+                    print("VAROVANI: Zadne odpovidajici radek se nepodarilo parsovat.")
                     litvinov_data = "Litvinov:\nZadne info\n-"
-            
-            print("Data pro Litvínov aktualizována.")
             
         except Exception as e:
             print("Chyba ve vlákně:", e)
