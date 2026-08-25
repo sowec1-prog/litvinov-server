@@ -25,75 +25,77 @@ def get_litvinov():
             radecky = resp.text.split("</tr>")
             
             for r in radecky:
-                if "VERVA" in r or "Verva" in r or "Litvínov" in r or "Litvinov" in r:
-                    cisty = re.sub(r'<[^>]+>', ' ', r)
-                    cisty = " ".join(cisty.split())
-                    cisty_bez_diak = odstran_diakritiku(cisty)
-                    
-                    # 1. Hledáme datum/čas (před zápasem) nebo živé skóre (během zápasu)
-                    match_cas = re.search(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cisty_bez_diak)
-                    match_skore = re.search(r'\d+\s*:\s*\d+', cisty_bez_diak)
-                    
-                    den_cas = "Zatim bez casu"
-                    pozice_start = -1
-                    pozice_konec = -1
-                    
-                    if match_cas:
-                        den_cas = f"{match_cas.group(1)} {match_cas.group(2)} {match_cas.group(3).replace('.', ':')}"
-                        pozice_start = match_cas.start()
-                        pozice_konec = match_cas.end()
-                    elif match_skore:
-                        den_cas = match_skore.group(0)
-                        pozice_start = match_skore.start()
-                        pozice_konec = match_skore.end()
-                    else:
-                        continue # Pokud tam není nic z toho, jdeme dál
-                    
-                    # Rozdělení na levou (domácí) a pravou (hosté) stranu podle pozice v textu
-                    leva_cast = cisty_bez_diak[:pozice_start]
-                    prava_cast = cisty_bez_diak[pozice_konec:]
-                    
-                    # Seznam extraligových týmů
-                    extraliga_tymu = [
-                        "Litvinov", "Litvínov", "Verva", "VERVA",
-                        "Kometa Brno", "Kometa", "Sparta Praha", "Sparta",
-                        "Pardubice", "Dynamo", "Ocelari Trinec", "Trinec",
-                        "Vitkovice", "Mountfield HK", "Hradec", "Skoda Plzen", "Plzen",
-                        "Bili Tygri Liberec", "Liberec", "Mlada Boleslav", "Boleslav",
-                        "Rytiri Kladno", "Kladno", "Karlovy Vary", "Vary", "Energie",
-                        "Olomouc", "Motor C. Budejovice", "Motor", "Budejovice"
-                    ]
-                    
-                    def najdi_tym(text):
-                        text_lower = text.lower()
-                        for t in sorted(extraliga_tymu, key=len, reverse=True):
-                            if t.lower() in text_lower:
-                                if "kometa" in t.lower(): return "Kometa Brno"
-                                if "sparta" in t.lower(): return "Sparta Praha"
-                                if "pardubice" in t.lower() or "dynamo" in t.lower(): return "Pardubice"
-                                if "trinec" in t.lower() or "ocelari" in t.lower(): return "Ocelari Trinec"
-                                if "vitkovice" in t.lower(): return "Vitkovice"
-                                if "hradec" in t.lower() or "mountfield" in t.lower(): return "Mountfield HK"
-                                if "plzen" in t.lower() or "skoda" in t.lower(): return "Skoda Plzen"
-                                if "liberec" in t.lower(): return "Liberec"
-                                if "boleslav" in t.lower(): return "Mlada Boleslav"
-                                if "kladno" in t.lower() or "rytiri" in t.lower(): return "Kladno"
-                                if "vary" in t.lower() or "energie" in t.lower(): return "Karlovy Vary"
-                                if "olomouc" in t.lower(): return "Olomouc"
-                                if "motor" in t.lower() or "budejovice" in t.lower(): return "Motor C. Bud."
-                                if "litvinov" in t.lower() or "verva" in t.lower(): return "HC Verva"
-                        return "Soupeř"
+                cisty = re.sub(r'<[^>]+>', ' ', r)
+                cisty = " ".join(cisty.split())
+                cisty_bez_diak = odstran_diakritiku(cisty)
+                
+                # Ochrana: Zkontrolujeme, jestli je na tomto konkrétním řádku opravdu Litvínov / Verva
+                # (Zabráníme tím tomu, aby to vzalo Motor nebo Třinec z jiného řádku)
+                if not ("litvinov" in cisty_bez_diak.lower() or "verva" in cisty_bez_diak.lower()):
+                    continue
+                
+                # 1. Hledáme datum/čas (před zápasem) nebo živé skóre (během zápasu)
+                match_cas = re.search(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cisty_bez_diak)
+                match_skore = re.search(r'\d+\s*:\s*\d+', cisty_bez_diak)
+                
+                den_cas = "Zatim bez casu"
+                pozice_start = -1
+                pozice_konec = -1
+                
+                if match_cas:
+                    den_cas = f"{match_cas.group(1)} {match_cas.group(2)} {match_cas.group(3).replace('.', ':')}"
+                    pozice_start = match_cas.start()
+                    pozice_konec = match_cas.end()
+                elif match_skore:
+                    den_cas = match_skore.group(0)
+                    pozice_start = match_skore.start()
+                    pozice_konec = match_skore.end()
+                else:
+                    continue # Pokud tam není čas ani skóre, jdeme na další řádek
+                
+                # Rozdělení na levou (domácí) a pravou (hosté) stranu podle pozice data/času
+                leva_cast = cisty_bez_diak[:pozice_start]
+                prava_cast = cisty_bez_diak[pozice_konec:]
+                
+                # Seznam extraligových týmů
+                extraliga_tymu = [
+                    "Litvinov", "Litvínov", "Verva", "VERVA",
+                    "Kometa Brno", "Kometa", "Sparta Praha", "Sparta",
+                    "Pardubice", "Dynamo", "Ocelari Trinec", "Trinec",
+                    "Vitkovice", "Mountfield HK", "Hradec", "Skoda Plzen", "Plzen",
+                    "Bili Tygri Liberec", "Liberec", "Mlada Boleslav", "Boleslav",
+                    "Rytiri Kladno", "Kladno", "Karlovy Vary", "Vary", "Energie",
+                    "Olomouc", "Motor C. Budejovice", "Motor", "Budejovice"
+                ]
+                
+                def najdi_tym(text):
+                    text_lower = text.lower()
+                    for t in sorted(extraliga_tymu, key=len, reverse=True):
+                        if t.lower() in text_lower:
+                            if "kometa" in t.lower(): return "Kometa Brno"
+                            if "sparta" in t.lower(): return "Sparta Praha"
+                            if "pardubice" in t.lower() or "dynamo" in t.lower(): return "Pardubice"
+                            if "trinec" in t.lower() or "ocelari" in t.lower(): return "Ocelari Trinec"
+                            if "vitkovice" in t.lower(): return "Vitkovice"
+                            if "hradec" in t.lower() or "mountfield" in t.lower(): return "Mountfield HK"
+                            if "plzen" in t.lower() or "skoda" in t.lower(): return "Skoda Plzen"
+                            if "liberec" in t.lower(): return "Liberec"
+                            if "boleslav" in t.lower(): return "Mlada Boleslav"
+                            if "kladno" in t.lower() or "rytiri" in t.lower(): return "Kladno"
+                            if "vary" in t.lower() or "energie" in t.lower(): return "Karlovy Vary"
+                            if "olomouc" in t.lower(): return "Olomouc"
+                            if "motor" in t.lower() or "budejovice" in t.lower(): return "Motor C. Bud."
+                            if "litvinov" in t.lower() or "verva" in t.lower(): return "HC Verva"
+                    return "Soupeř"
 
-                    domaci = najdi_tym(leva_cast)
-                    hoste = najdi_tym(prava_cast)
-                    
-                    # Výsledek přesně do 3 řádků pro displej
-                    return f"{domaci}\n{den_cas}\n{hoste}"
-            
-            return "HC Verva\nZadne info\n-"
-        else:
-            return f"HC Verva\nChyba serveru\n{resp.status_code}"
-            
+                domaci = najdi_tym(leva_cast)
+                hoste = najdi_tym(prava_cast)
+                
+                # Výsledek přesně do 3 řádků pro displej
+                return f"{domaci}\n{den_cas}\n{hoste}"
+        
+        return "HC Verva\nZadne info\n-"
+        
     except Exception as e:
         return f"HC Verva\nChyba stahovani\n-"
 
