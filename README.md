@@ -1,4 +1,4 @@
-# 🏒 Litvínov Hokej IoT Tracker (ESP32 + Flask)
+# 🏒 HC Verva Litvínov Hokej IoT Tracker (ESP32 + Flask)
 
 Chytré IoT zařízení postavené na **ESP32** a **OLED displeji**, které v reálném čase sleduje zápasy hokejového týmu **HC Litvínov** (Tipsport Extraliga). 
 
