@@ -9,7 +9,6 @@ app = Flask(__name__)
 litvinov_data = "Litvinov:\nHledam zapas..."
 
 def odstran_diakritiku(text):
-    """Funkce pro odstranění háčků a čárek pro OLED displej."""
     s_diakritikou = "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ"
     bez_diakritiky = "acdeeinorstuuyzACDEEINORSTUUYZ"
     preklad = str.maketrans(s_diakritikou, bez_diakritiky)
@@ -22,8 +21,9 @@ def aktualizuj_litvinov():
             print("Hledam zapas Litvinova...")
             url = "https://www.hokej.cz/tipsport-extraliga/zapasy"
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-            resp = requests.get(url, headers=headers)
             
+            # Přidán timeout=10, aby to nezamrzlo navěky
+            resp = requests.get(url, headers=headers, timeout=10)
             print(f"Status stahovani: {resp.status_code}")
             
             if resp.status_code == 200:
@@ -58,13 +58,14 @@ def aktualizuj_litvinov():
                 if not nalezeno:
                     print("VAROVANI: Zadne odpovidajici radek se nepodarilo parsovat.")
                     litvinov_data = "Litvinov:\nZadne info\n-"
+            else:
+                print(f"Chyba HTTP status: {resp.status_code}")
             
         except Exception as e:
-            print("Chyba ve vlákně:", e)
+            print("CHYBA VE VLAKNE:", e)  # Tady se teď vytiskne přesná chyba!
             
         time.sleep(60)
 
-# Spuštění aktualizačního vlákna hned při startu (funguje na Renderu i lokálně)
 t = threading.Thread(target=aktualizuj_litvinov, daemon=True)
 t.start()
 
