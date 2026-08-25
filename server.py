@@ -107,7 +107,14 @@ def aktualizuj_litvinov():
 def get_litvinov():
     return litvinov_data
 
+import os
+
 if __name__ == "__main__":
+    # Spuštění lokálně na PC pro testy
     t = threading.Thread(target=aktualizuj_litvinov, daemon=True)
     t.start()
     app.run(host="0.0.0.0", port=5000, debug=False)
+else:
+    # Spuštění na cloudu (Render sám spustí vlákno při startu aplikace)
+    t = threading.Thread(target=aktualizuj_litvinov, daemon=True)
+    t.start()
