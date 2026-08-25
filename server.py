@@ -1,10 +1,8 @@
 from flask import Flask
 import requests
-from bs4 import BeautifulSoup
 import re
 import threading
 import time
-import os
 
 app = Flask(__name__)
 
@@ -31,24 +29,24 @@ def aktualizuj_litvinov():
                 nalezeno = False
                 
                 for r in radecky:
-                    if "Litvínov" in r or "Litvinov" in r:
+                    # Hledáme klíčové slovo VERVA (bez diakritiky, spolehlivé)
+                    if "VERVA" in r or "Verva" in r:
                         cisty = re.sub(r'<[^>]+>', ' ', r)
                         cisty = " ".join(cisty.split())
                         
-                        # Najdeme všechny výskyty data a času v řádku
                         matches = list(re.finditer(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cisty))
                         
                         if matches:
                             m = matches[0]
                             den_cas = odstran_diakritiku(f"{m.group(1)} {m.group(2)} {m.group(3).replace('.', ':')}")
                             
-                            domaci_raw = cisty[:m.start()].strip()
-                            domaci = "Litvinov" if "Litv" in domaci_raw else odstran_diakritiku(domaci_raw)
+                            # Domácí tým nastavíme napevno jako Litvinov
+                            domaci = "Litvinov"
                             
                             m_end = matches[1].end() if len(matches) > 1 else m.end()
                             hoste_raw = cisty[m_end:].strip()
                             
-                            noise = ["HC", "LIT", "KOM", "PCE", "SPA", "PLZ", "MLA", "OLO", "VIT", "LIB", "TRI", "CEB", "KVA", "HRA", "VERVA"]
+                            noise = ["HC", "LIT", "KOM", "PCE", "SPA", "PLZ", "MLA", "OLO", "VIT", "LIB", "TRI", "CEB", "KVA", "HRA", "VERVA", "Litvinov", "Litvínov"]
                             h_slova = [s for s in hoste_raw.split() if s not in noise]
                             hoste_str = " ".join(h_slova[:2]) if len(h_slova) >= 2 else (" ".join(h_slova) if h_slova else "Souper")
                             hoste = odstran_diakritiku(hoste_str)
