@@ -1,6 +1,6 @@
 from flask import Flask
 import requests
-import re
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
@@ -17,105 +17,104 @@ def domov():
 @app.route("/litvinov")
 def get_litvinov():
     try:
-        # Stáhneme přímo hlavní stránku zápasů extraligy, kde je tabulka přehledná
-        url = "https://www.hokej.cz/tipsport-extraliga/zapasy"
+        url = "https://www.hokej.cz/tipsport-extraliga/zapasy?matchlist-filter-team=823"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         resp = requests.get(url, headers=headers, timeout=10)
         
         if resp.status_code == 200:
-            # Rozsekáme stránku na jednotlivé řádky tabulky zápasů
-            radecky = resp.text.split("</tr>")
+            soup = BeautifulSoup(resp.text, 'html.parser')
             
-            for r in radecky:
-                cisty = re.sub(r'<[^>]+>', ' ', r)
-                cisty = " ".join(cisty.split())
-                cisty_bez_diak = odstran_diakritiku(cisty)
+            # Hokej.cz mívá zápasy v tabulkách nebo v blocích tříd match-row / podobně
+            # Zkusíme najít všechny řádky tabulky (tr) nebo divy se zápasy
+            radky = soup.find_all('tr')
+            
+            for r in radky:
+                text_radek = r.get_text(separator=" ", strip=True)
+                text_bez_diak = odstran_diakritiku(text_radek).lower()
                 
-                # Zkontrolujeme, jestli řádek obsahuje Litvínov nebo Vervu
-                if "litvinov" not in cisty_bez_diak.lower() and "verva" not in cisty_bez_diak.lower():
+                # Řádek musí obsahovat Litvínov nebo Vervu
+                if "litvinov" not in text_bez_diak and "verva" not in text_bez_diak:
                     continue
                 
-                # Zkontrolujeme, jestli jde o skutečný zápas (musí obsahovat den v týdnu a čas, nebo skóre)
-                match_cas = re.search(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cisty_bez_diak)
-                match_skore = re.search(r'\d+\s*:\s*\d+', cisty_bez_diak)
+                # Zjistíme, jestli obsahuje datum/čas (např. PO, ÚT, ST...) nebo skóre
+                # Hledáme den v týdnu následovaný datem
+                import re
+                match_cas = re.search(r'(po|ut|st|ct|pa|so|ne)\.?\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', text_bez_diak)
+                match_skore = re.search(r'\d+\s*:\s*\d+', text_bez_diak)
                 
                 if not match_cas and not match_skore:
-                    continue # Pokud to je jen zmínka v tabulce bez času, ignorujeme
+                    continue
                 
                 den_cas = ""
-                pozice_start = -1
-                pozice_konec = -1
-                
                 if match_cas:
-                    den_cas = f"{match_cas.group(1)} {match_cas.group(2)} {match_cas.group(3).replace('.', ':')}"
-                    pozice_start = match_cas.start()
-                    pozice_konec = match_cas.end()
+                    den_cas = f"{match_cas.group(1).upper()} {match_cas.group(2)} {match_cas.group(3).replace('.', ':')}"
                 elif match_skore:
                     den_cas = match_skore.group(0)
-                    pozice_start = match_skore.start()
-                    pozice_konec = match_skore.end()
                 
-                # Seznam extraligových týmů
-                extraliga_tymu = [
+                # Extrakce týmů uvnitř tohoto konkrétního řádku (DOM struktury)
+                # Zkusíme najít týmy v buňkách (td)
+                bunky = r.find_all('td')
+                domaci = ""
+                hoste = ""
+                
+                # Často bývá domácí v první buňce s týmem, host v jiné, nebo to vytáhneme bezpečně z textu buněk
+                tymy_seznam = [
                     "Kometa Brno", "Kometa", "Sparta Praha", "Sparta",
                     "Pardubice", "Dynamo", "Ocelari Trinec", "Trinec",
                     "Vitkovice", "Mountfield HK", "Hradec", "Skoda Plzen", "Plzen",
                     "Bili Tygri Liberec", "Liberec", "Mlada Boleslav", "Boleslav",
                     "Rytiri Kladno", "Kladno", "Karlovy Vary", "Vary", "Energie",
-                    "Olomouc", "Motor C. Budejovice", "Motor", "Budejovice"
+                    "Olomouc", "Motor C. Budejovice", "Motor", "Budejovice",
+                    "Litvinov", "Verva"
                 ]
                 
-                nalezeny_souper = None
-                for t in sorted(extraliga_tymu, key=len, reverse=True):
-                    if t.lower() in ["litvinov", "litvínov", "verva"]:
-                        continue
-                    if t.lower() in cisty_bez_diak.lower():
-                        if "kometa" in t.lower(): nalezeny_souper = "Kometa Brno"
-                        elif "sparta" in t.lower(): nalezeny_souper = "Sparta Praha"
-                        elif "pardubice" in t.lower() or "dynamo" in t.lower(): nalezeny_souper = "Pardubice"
-                        elif "trinec" in t.lower() or "ocelari" in t.lower(): nalezeny_souper = "Ocelari Trinec"
-                        elif "vitkovice" in t.lower(): nalezeny_souper = "Vitkovice"
-                        elif "hradec" in t.lower() or "mountfield" in t.lower(): nalezeny_souper = "Mountfield HK"
-                        elif "plzen" in t.lower() or "skoda" in t.lower(): nalezeny_souper = "Skoda Plzen"
-                        elif "liberec" in t.lower(): nalezeny_souper = "Liberec"
-                        elif "boleslav" in t.lower(): nalezeny_souper = "Mlada Boleslav"
-                        elif "kladno" in t.lower() or "rytiri" in t.lower(): nalezeny_souper = "Kladno"
-                        elif "vary" in t.lower() or "energie" in t.lower(): nalezeny_souper = "Karlovy Vary"
-                        elif "olomouc" in t.lower(): nalezeny_souper = "Olomouc"
-                        elif "motor" in t.lower() or "budejovice" in t.lower(): nalezeny_souper = "Motor C. Bud."
-                        if nalezeny_souper:
-                            break
-                            
-                if not nalezeny_souper:
+                nalezene_tymy = []
+                for t in sorted(tymy_seznam, key=len, reverse=True):
+                    if t.lower() in text_bez_diak:
+                        # Sjednocení názvů
+                        sjednoceny = t
+                        if "kometa" in t.lower(): sjednoceny = "Kometa Brno"
+                        elif "sparta" in t.lower(): sjednoceny = "Sparta Praha"
+                        elif "pardubice" in t.lower() or "dynamo" in t.lower(): sjednoceny = "Pardubice"
+                        elif "trinec" in t.lower() or "ocelari" in t.lower(): sjednoceny = "Ocelari Trinec"
+                        elif "vitkovice" in t.lower(): sjednoceny = "Vitkovice"
+                        elif "hradec" in t.lower() or "mountfield" in t.lower(): sjednoceny = "Mountfield HK"
+                        elif "plzen" in t.lower() or "skoda" in t.lower(): sjednoceny = "Skoda Plzen"
+                        elif "liberec" in t.lower(): sjednoceny = "Liberec"
+                        elif "boleslav" in t.lower(): sjednoceny = "Mlada Boleslav"
+                        elif "kladno" in t.lower() or "rytiri" in t.lower(): sjednoceny = "Kladno"
+                        elif "vary" in t.lower() or "energie" in t.lower(): sjednoceny = "Karlovy Vary"
+                        elif "olomouc" in t.lower(): sjednoceny = "Olomouc"
+                        elif "motor" in t.lower() or "budejovice" in t.lower(): sjednoceny = "Motor C. Bud."
+                        elif "litvinov" in t.lower() or "verva" in t.lower(): sjednoceny = "HC Verva"
+                        
+                        if sjednoceny not in nalazene_tymy:
+                            nalazene_tymy.append(sjednoceny)
+                
+                # Musíme najít přesně dva týmy (Litvínov + soupeře)
+                souperi = [t for t in nalazene_tymy if t != "HC Verva"]
+                if not souperi:
                     continue
                 
-                # Určení domova / venkova
-                leva_cast = cisty_bez_diak[:pozice_start]
-                prava_cast = cisty_bez_diak[pozice_konec:]
+                souper = souperi[0]
                 
-                je_doma = False
-                if "litvinov" in leva_cast.lower() or "verva" in leva_cast.lower():
-                    je_doma = True
-                elif "litvinov" in prava_cast.lower() or "verva" in prava_cast.lower():
-                    je_doma = False
+                # Zjištění, kdo hraje doma (kdo je v HTML dřív na řádku)
+                pozice_verva = text_bez_diak.find("litvinov")
+                if pozice_verva == -1: pozice_verva = text_bez_diak.find("verva")
+                
+                pozice_soup = text_bez_diak.find(souper.lower()[:5])
+                
+                if pozice_verva < pozice_soup:
+                    return f"HC Verva\n{den_cas}\n{souper}"
                 else:
-                    pozice_verva = cisty_bez_diak.lower().find("litvinov")
-                    if pozice_verva == -1: pozice_verva = cisty_bez_diak.lower().find("verva")
-                    pozice_s = cisty_bez_diak.lower().find(nalezeny_souper.lower()[:5])
-                    je_doma = (pozice_verva < pozice_s)
-
-                # Jakmile najdeme první platný řádek s Litvínovem, okamžitě ho vrátíme a končíme
-                if je_doma:
-                    return f"HC Verva\n{den_cas}\n{nalezeny_souper}"
-                else:
-                    return f"{nalezeny_souper}\n{den_cas}\nHC Verva"
+                    return f"{souper}\n{den_cas}\nHC Verva"
             
             return "HC Verva\nZadne info\n-"
         else:
             return f"HC Verva\nChyba serveru\n{resp.status_code}"
             
     except Exception as e:
-        return f"HC Verva\nChyba stahovani\n-"
+        return f"HC Verva\nChyba stahovani\n{str(e)}"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
