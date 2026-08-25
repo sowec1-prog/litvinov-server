@@ -53,7 +53,8 @@ def aktualizuj_litvinov():
                         noise = ["HC", "LIT", "KOM", "PCE", "SPA", "PLZ", "MLA", "OLO", "VIT", "LIB", "TRI", "CEB", "KVA", "HRA", "VERVA"]
                         
                         skore_match = re.search(r'(\d+)\s*:\s*(\d+)', cista_veta)
-                        cas_match = re.search(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}:\d{2})', cista_veta)
+                        # OPRAVENO: [.:] zohlední tečku i dvojtečku v čase zápasu (např. 17.30)
+                        cas_match = re.search(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cista_veta)
                         
                         if skore_match and not cas_match:
                             skore = f"{skore_match.group(1)} : {skore_match.group(2)}"
@@ -73,7 +74,8 @@ def aktualizuj_litvinov():
                         elif cas_match:
                             den = cas_match.group(1)
                             datum = cas_match.group(2)
-                            cas = cas_match.group(3)
+                            # Sjednotíme tečku v čase na dvojtečku pro hezčí vzhled
+                            cas = cas_match.group(3).replace('.', ':')
                             datum_cas = f"{den} {datum} {cas}"
                             
                             domaci_raw = cista_veta[:cas_match.start()].strip()
