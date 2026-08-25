@@ -32,7 +32,7 @@ def aktualizuj_litvinov():
                 
                 for tr in soup.find_all('tr'):
                     tr_text = tr.get_text(" ", strip=True)
-                    if "Litvínov" in tr_text or "Litvinov" in tr_text:
+                    if "litvinov" in tr_text.lower() or "litvínov" in tr_text.lower() or "lit" in tr_text.lower():
                         
                         tds = tr.find_all('td')
                         bunky_teksty = []
