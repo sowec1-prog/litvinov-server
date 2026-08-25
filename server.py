@@ -22,7 +22,7 @@ def aktualizuj_litvinov():
     while True:
         try:
             print("Hledam zapas Litvinova...")
-            url = "https://www.hokej.cz/tipsport-extraliga/zapasy"
+            url = "https://www.hokej.cz/tipsport-extraliga/zapasy?matchlist-filter-season=2026&matchlist-filter-competition=7567&matchlist-filter-team=823"
             headers = {"User-Agent": "Mozilla/5.0"}
             resp = requests.get(url, headers=headers)
             
