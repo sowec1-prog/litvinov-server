@@ -22,69 +22,39 @@ def aktualizuj_litvinov():
     while True:
         try:
             print("Hledam zapas Litvinova...")
-            url = "https://www.hokej.cz/tipsport-extraliga/zapasy?matchlist-filter-season=2026&matchlist-filter-competition=7567&matchlist-filter-team=823"
+            url = "https://www.hokej.cz/tipsport-extraliga/zapasy"
             headers = {"User-Agent": "Mozilla/5.0"}
             resp = requests.get(url, headers=headers)
             
             if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, 'html.parser')
+                radecky = resp.text.split("</tr>")
                 nalezeno = False
                 
-                for tr in soup.find_all('tr'):
-                    tr_text = tr.get_text(" ", strip=True)
-                    if "litvinov" in tr_text.lower() or "litvínov" in tr_text.lower() or "lit" in tr_text.lower():
+                for r in radecky:
+                    if "Litvínov" in r or "Litvinov" in r:
+                        cisty = re.sub(r'<[^>]+>', ' ', r)
+                        cisty = " ".join(cisty.split())
                         
-                        tds = tr.find_all('td')
-                        bunky_teksty = []
-                        for td in tds:
-                            t = td.get_text(" ", strip=True)
-                            if t and t not in bunky_teksty:
-                                bunky_teksty.append(t)
+                        # Najdeme všechny výskyty data a času v řádku
+                        matches = list(re.finditer(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cisty))
                         
-                        cely_text = odstran_diakritiku(" ".join(bunky_teksty))
-                        
-                        slova = cely_text.split()
-                        unikatni_slova = []
-                        for s in slova:
-                            if not unikatni_slova or unikatni_slova[-1] != s:
-                                unikatni_slova.append(s)
-                        
-                        cista_veta = " ".join(unikatni_slova)
-                        noise = ["HC", "LIT", "KOM", "PCE", "SPA", "PLZ", "MLA", "OLO", "VIT", "LIB", "TRI", "CEB", "KVA", "HRA", "VERVA"]
-                        
-                        skore_match = re.search(r'(\d+)\s*:\s*(\d+)', cista_veta)
-                        cas_match = re.search(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cista_veta)
-                        
-                        if skore_match and not cas_match:
-                            skore = f"{skore_match.group(1)} : {skore_match.group(2)}"
-                            pred_skore = cista_veta[:skore_match.start()].strip()
-                            za_skore = cista_veta[skore_match.end():].strip()
+                        if matches:
+                            m = matches[0]
+                            den_cas = odstran_diakritiku(f"{m.group(1)} {m.group(2)} {m.group(3).replace('.', ':')}")
                             
-                            d_slova = [s for s in pred_skore.split() if s not in noise]
-                            h_slova = [s for s in za_skore.split() if s not in noise]
+                            domaci_raw = cisty[:m.start()].strip()
+                            domaci = "Litvinov" if "Litv" in domaci_raw else odstran_diakritiku(domaci_raw)
                             
-                            domaci_str = " ".join(d_slova[-2:]) if len(d_slova) >= 2 else (" ".join(d_slova) if d_slova else "Litvinov")
-                            hoste_str = " ".join(h_slova[:2]) if len(h_slova) >= 2 else (" ".join(h_slova) if h_slova else "Souper")
+                            m_end = matches[1].end() if len(matches) > 1 else m.end()
+                            hoste_raw = cisty[m_end:].strip()
                             
-                            litvinov_data = f"{domaci_str}\n{skore}\n{hoste_str}"
-                            nalezeno = True
-                            break
-                            
-                        elif cas_match:
-                            den = cas_match.group(1)
-                            datum = cas_match.group(2)
-                            cas = cas_match.group(3).replace('.', ':')
-                            datum_cas = f"{den} {datum} {cas}"
-                            
-                            domaci_raw = cista_veta[:cas_match.start()].strip()
-                            d_slova = [s for s in domaci_raw.split() if s not in noise]
-                            domaci_str = " ".join(d_slova[-2:]) if len(d_slova) >= 2 else (" ".join(d_slova) if d_slova else "Litvinov")
-                            
-                            hoste_raw = cista_veta[cas_match.end():].strip()
+                            noise = ["HC", "LIT", "KOM", "PCE", "SPA", "PLZ", "MLA", "OLO", "VIT", "LIB", "TRI", "CEB", "KVA", "HRA", "VERVA"]
                             h_slova = [s for s in hoste_raw.split() if s not in noise]
                             hoste_str = " ".join(h_slova[:2]) if len(h_slova) >= 2 else (" ".join(h_slova) if h_slova else "Souper")
+                            hoste = odstran_diakritiku(hoste_str)
                             
-                            litvinov_data = f"{domaci_str}\n{datum_cas}\n{hoste_str}"
+                            # Uložíme formát pro displej (3 řádky oddělené \n)
+                            litvinov_data = f"{domaci}\n{den_cas}\n{hoste}"
                             nalezeno = True
                             break
                 
