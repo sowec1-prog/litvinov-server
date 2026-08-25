@@ -17,11 +17,13 @@ def domov():
 @app.route("/litvinov")
 def get_litvinov():
     try:
-        url = "https://www.hokej.cz/tipsport-extraliga/zapasy?matchlist-filter-team=823"
+        # Stáhneme přímo hlavní stránku zápasů extraligy, kde je tabulka přehledná
+        url = "https://www.hokej.cz/tipsport-extraliga/zapasy"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         resp = requests.get(url, headers=headers, timeout=10)
         
         if resp.status_code == 200:
+            # Rozsekáme stránku na jednotlivé řádky tabulky zápasů
             radecky = resp.text.split("</tr>")
             
             for r in radecky:
@@ -29,14 +31,16 @@ def get_litvinov():
                 cisty = " ".join(cisty.split())
                 cisty_bez_diak = odstran_diakritiku(cisty)
                 
-                # 🛑 ABSOLUTNÍ POJISTKA: Tento řádek MUSÍ obsahovat Litvínov nebo Vervu!
-                # Pokud ne, okamžitě ho přeskočíme a nezajímá nás, co je na něm za jiný tým.
-                if not ("litvinov" in cisty_bez_diak.lower() or "verva" in cisty_bez_diak.lower()):
+                # Zkontrolujeme, jestli řádek obsahuje Litvínov nebo Vervu
+                if "litvinov" not in cisty_bez_diak.lower() and "verva" not in cisty_bez_diak.lower():
                     continue
                 
-                # 1. Hledáme datum/čas nebo živé skóre
+                # Zkontrolujeme, jestli jde o skutečný zápas (musí obsahovat den v týdnu a čas, nebo skóre)
                 match_cas = re.search(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cisty_bez_diak)
                 match_skore = re.search(r'\d+\s*:\s*\d+', cisty_bez_diak)
+                
+                if not match_cas and not match_skore:
+                    continue # Pokud to je jen zmínka v tabulce bez času, ignorujeme
                 
                 den_cas = ""
                 pozice_start = -1
@@ -50,10 +54,8 @@ def get_litvinov():
                     den_cas = match_skore.group(0)
                     pozice_start = match_skore.start()
                     pozice_konec = match_skore.end()
-                else:
-                    continue
                 
-                # 2. Seznam extraligových týmů
+                # Seznam extraligových týmů
                 extraliga_tymu = [
                     "Kometa Brno", "Kometa", "Sparta Praha", "Sparta",
                     "Pardubice", "Dynamo", "Ocelari Trinec", "Trinec",
@@ -65,10 +67,8 @@ def get_litvinov():
                 
                 nalezeny_souper = None
                 for t in sorted(extraliga_tymu, key=len, reverse=True):
-                    # Ignorujeme samotný Litvínov/Vervu, hledáme *druhý* tým v řádku
                     if t.lower() in ["litvinov", "litvínov", "verva"]:
                         continue
-                        
                     if t.lower() in cisty_bez_diak.lower():
                         if "kometa" in t.lower(): nalezeny_souper = "Kometa Brno"
                         elif "sparta" in t.lower(): nalezeny_souper = "Sparta Praha"
@@ -89,7 +89,7 @@ def get_litvinov():
                 if not nalezeny_souper:
                     continue
                 
-                # 3. Určení domácí / venkovní podle pozice v textu
+                # Určení domova / venkova
                 leva_cast = cisty_bez_diak[:pozice_start]
                 prava_cast = cisty_bez_diak[pozice_konec:]
                 
@@ -104,6 +104,7 @@ def get_litvinov():
                     pozice_s = cisty_bez_diak.lower().find(nalezeny_souper.lower()[:5])
                     je_doma = (pozice_verva < pozice_s)
 
+                # Jakmile najdeme první platný řádek s Litvínovem, okamžitě ho vrátíme a končíme
                 if je_doma:
                     return f"HC Verva\n{den_cas}\n{nalezeny_souper}"
                 else:
