@@ -17,8 +17,8 @@ def domov():
 @app.route("/litvinov")
 def get_litvinov():
     try:
-        # Stáhneme hlavní přehled zápasů extraligy
-        url = "https://www.hokej.cz/tipsport-extraliga/zapasy"
+        # Použijeme URL s přímým filtrem pro Litvínov (ID týmu 823)
+        url = "https://www.hokej.cz/tipsport-extraliga/zapasy?matchlist-filter-team=823"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         resp = requests.get(url, headers=headers, timeout=10)
         
@@ -30,22 +30,24 @@ def get_litvinov():
                 cisty = " ".join(cisty.split())
                 cisty_bez_diak = odstran_diakritiku(cisty)
                 
-                # HLAVNÍ POJISTKA: Řádek MUSÍ obsahovat Litvínov nebo Vervu.
-                # Pokud ne, okamžitě ho ignorujeme (to vyřadí Motor, Třinec a všechny ostatní).
-                if "litvinov" not in cisty_bez_diak.lower() and "verva" not in cisty_bez_diak.lower():
-                    continue
-                
-                # 1. Hledáme datum/čas nebo živé skóre
+                # 1. Musíme najít datum/čas nebo živé skóre, jinak to není řádek se zápasem
                 match_cas = re.search(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cisty_bez_diak)
                 match_skore = re.search(r'\d+\s*:\s*\d+', cisty_bez_diak)
                 
-                den_cas = "Zatim bez casu"
+                den_cas = ""
+                pozice_start = -1
+                pozice_konec = -1
+                
                 if match_cas:
                     den_cas = f"{match_cas.group(1)} {match_cas.group(2)} {match_cas.group(3).replace('.', ':')}"
+                    pozice_start = match_cas.start()
+                    pozice_konec = match_cas.end()
                 elif match_skore:
                     den_cas = match_skore.group(0)
+                    pozice_start = match_skore.start()
+                    pozice_konec = match_skore.end()
                 else:
-                    continue # Pokud v řádku Litvínova není čas ani skóre, zkusíme další
+                    continue # Pokud v řádku není čas ani skóre, jdeme dál
                 
                 # 2. Seznam extraligových týmů
                 extraliga_tymu = [
@@ -77,21 +79,28 @@ def get_litvinov():
                             break
                             
                 if not nalezeny_souper:
-                    nalezeny_souper = "Soupeř"
+                    continue # Pokud v řádku není soupeř, nejde o zápas
                 
-                # 3. Určení domova / venkova podle pozice slov v řádku
-                pozice_verva = 999
-                for kw in ["litvinov", "verva"]:
-                    p = cisty_bez_diak.lower().find(kw)
-                    if p != -1 and p < pozice_verva:
-                        pozice_verva = p
-                        
-                pozice_soupeře = cisty_bez_diak.lower().find(nalezeny_souper.lower()[:5])
-                if pozice_soupeře == -1:
-                    pozice_soupeře = 0
+                # 3. Určení domova / venkova podle pozice v textu
+                # Rozdělíme řádek na část před časem a za časem
+                leva_cast = cisty_bez_diak[:pozice_start]
+                prava_cast = cisty_bez_diak[pozice_konec:]
                 
+                # Zjistíme, jestli je Litvínov v levé nebo pravé části
+                je_doma = False
+                if "litvinov" in leva_cast.lower() or "verva" in leva_cast.lower():
+                    je_doma = True
+                elif "litvinov" in prava_cast.lower() or "verva" in prava_cast.lower():
+                    je_doma = False
+                else:
+                    # Pojistka, kdyby název nebyl přesně v rozdělení
+                    pozice_verva = cisty_bez_diak.lower().find("litvinov")
+                    if pozice_verva == -1: pozice_verva = cisty_bez_diak.lower().find("verva")
+                    pozice_s = cisty_bez_diak.lower().find(nalezeny_souper.lower()[:5])
+                    je_doma = (pozice_verva < pozice_s)
+
                 # Vrátíme správné pořadí řádků
-                if pozice_verva < pozice_soupeře:
+                if je_doma:
                     return f"HC Verva\n{den_cas}\n{nalezeny_souper}"
                 else:
                     return f"{nalezeny_souper}\n{den_cas}\nHC Verva"
