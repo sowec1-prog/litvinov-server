@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import re
 import threading
 import time
+import os
 
 app = Flask(__name__)
 
@@ -33,7 +34,6 @@ def aktualizuj_litvinov():
                     tr_text = tr.get_text(" ", strip=True)
                     if "Litvínov" in tr_text or "Litvinov" in tr_text:
                         
-                        # Získáme čisté texty z buněk (td)
                         tds = tr.find_all('td')
                         bunky_teksty = []
                         for td in tds:
@@ -43,7 +43,6 @@ def aktualizuj_litvinov():
                         
                         cely_text = odstran_diakritiku(" ".join(bunky_teksty))
                         
-                        # Odstraníme duplicitní slova jdoucí za sebou
                         slova = cely_text.split()
                         unikatni_slova = []
                         for s in slova:
@@ -53,14 +52,11 @@ def aktualizuj_litvinov():
                         cista_veta = " ".join(unikatni_slova)
                         noise = ["HC", "LIT", "KOM", "PCE", "SPA", "PLZ", "MLA", "OLO", "VIT", "LIB", "TRI", "CEB", "KVA", "HRA", "VERVA"]
                         
-                        # 1. ZKUSÍME NAJÍT ŽIVÉ SKÓRE (pokud zápas probíhá, hokej.cz ukazuje např. "2 : 1")
                         skore_match = re.search(r'(\d+)\s*:\s*(\d+)', cista_veta)
                         cas_match = re.search(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}:\d{2})', cista_veta)
                         
                         if skore_match and not cas_match:
-                            # Živý stav zápasu
                             skore = f"{skore_match.group(1)} : {skore_match.group(2)}"
-                            
                             pred_skore = cista_veta[:skore_match.start()].strip()
                             za_skore = cista_veta[skore_match.end():].strip()
                             
@@ -75,7 +71,6 @@ def aktualizuj_litvinov():
                             break
                             
                         elif cas_match:
-                            # Nadcházející zápas (datum a čas)
                             den = cas_match.group(1)
                             datum = cas_match.group(2)
                             cas = cas_match.group(3)
@@ -103,18 +98,20 @@ def aktualizuj_litvinov():
             
         time.sleep(60)
 
+@app.route("/")
+def domov():
+    return "Litvinov Hokej Server běží!"
+
 @app.route("/litvinov")
 def get_litvinov():
     return litvinov_data
 
-import os
-
+# Spuštění vlákna pro stahování dat jak lokálně, tak v cloudu
 if __name__ == "__main__":
-    # Spuštění lokálně na PC pro testy
     t = threading.Thread(target=aktualizuj_litvinov, daemon=True)
     t.start()
     app.run(host="0.0.0.0", port=5000, debug=False)
 else:
-    # Spuštění na cloudu (Render sám spustí vlákno při startu aplikace)
+    # Pro Gunicorn v cloudu
     t = threading.Thread(target=aktualizuj_litvinov, daemon=True)
     t.start()
