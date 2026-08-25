@@ -17,7 +17,8 @@ def domov():
 @app.route("/litvinov")
 def get_litvinov():
     try:
-        url = "https://www.hokej.cz/tipsport-extraliga/zapasy?matchlist-filter-season=2026&matchlist-filter-competition=7567&matchlist-filter-team=823"
+        # Stáhneme hlavní přehled zápasů extraligy
+        url = "https://www.hokej.cz/tipsport-extraliga/zapasy"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         resp = requests.get(url, headers=headers, timeout=10)
         
@@ -29,11 +30,12 @@ def get_litvinov():
                 cisty = " ".join(cisty.split())
                 cisty_bez_diak = odstran_diakritiku(cisty)
                 
-                # Řádek musí obsahovat Litvínov nebo Vervu
-                if not ("litvinov" in cisty_bez_diak.lower() or "verva" in cisty_bez_diak.lower()):
+                # HLAVNÍ POJISTKA: Řádek MUSÍ obsahovat Litvínov nebo Vervu.
+                # Pokud ne, okamžitě ho ignorujeme (to vyřadí Motor, Třinec a všechny ostatní).
+                if "litvinov" not in cisty_bez_diak.lower() and "verva" not in cisty_bez_diak.lower():
                     continue
                 
-                # 1. Najdeme datum/čas nebo živé skóre
+                # 1. Hledáme datum/čas nebo živé skóre
                 match_cas = re.search(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cisty_bez_diak)
                 match_skore = re.search(r'\d+\s*:\s*\d+', cisty_bez_diak)
                 
@@ -43,9 +45,9 @@ def get_litvinov():
                 elif match_skore:
                     den_cas = match_skore.group(0)
                 else:
-                    continue
+                    continue # Pokud v řádku Litvínova není čas ani skóre, zkusíme další
                 
-                # 2. Seznam všech týmů v extralize
+                # 2. Seznam extraligových týmů
                 extraliga_tymu = [
                     "Kometa Brno", "Kometa", "Sparta Praha", "Sparta",
                     "Pardubice", "Dynamo", "Ocelari Trinec", "Trinec",
@@ -55,11 +57,9 @@ def get_litvinov():
                     "Olomouc", "Motor C. Budejovice", "Motor", "Budejovice"
                 ]
                 
-                # Najdeme, jakého soupeře řádek obsahuje
                 nalezeny_souper = None
                 for t in sorted(extraliga_tymu, key=len, reverse=True):
                     if t.lower() in cisty_bez_diak.lower():
-                        # Sjednotíme názvy
                         if "kometa" in t.lower(): nalezeny_souper = "Kometa Brno"
                         elif "sparta" in t.lower(): nalezeny_souper = "Sparta Praha"
                         elif "pardubice" in t.lower() or "dynamo" in t.lower(): nalezeny_souper = "Pardubice"
@@ -77,19 +77,20 @@ def get_litvinov():
                             break
                             
                 if not nalezeny_souper:
-                    continue # Pokud nenajdeme soupeře, jdeme dál
+                    nalezeny_souper = "Soupeř"
                 
-                # 3. Zjistíme, kdo hraje doma a kdo venku podle pozice v textu
-                pozice_verva = -1
+                # 3. Určení domova / venkova podle pozice slov v řádku
+                pozice_verva = 999
                 for kw in ["litvinov", "verva"]:
                     p = cisty_bez_diak.lower().find(kw)
-                    if p != -1:
+                    if p != -1 and p < pozice_verva:
                         pozice_verva = p
-                        break
                         
-                pozice_soupeře = cisty_bez_diak.lower().find(nalezeny_souper.lower()[:5]) # hledáme podle začátku názvu
+                pozice_soupeře = cisty_bez_diak.lower().find(nalezeny_souper.lower()[:5])
+                if pozice_soupeře == -1:
+                    pozice_soupeře = 0
                 
-                # Pokud je Verva dřív v textu než soupeř, hraje doma. Jinak venku.
+                # Vrátíme správné pořadí řádků
                 if pozice_verva < pozice_soupeře:
                     return f"HC Verva\n{den_cas}\n{nalezeny_souper}"
                 else:
