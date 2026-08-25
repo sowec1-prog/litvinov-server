@@ -30,7 +30,7 @@ def get_litvinov():
                     cisty = " ".join(cisty.split())
                     cisty_bez_diak = odstran_diakritiku(cisty)
                     
-                    # 1. Hledáme buď datum/čas (před zápasem) nebo živé skóre (během zápasu)
+                    # 1. Hledáme datum/čas (před zápasem) nebo živé skóre (během zápasu)
                     match_cas = re.search(r'(PO|UT|ST|CT|PA|SO|NE)\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})', cisty_bez_diak)
                     match_skore = re.search(r'\d+\s*:\s*\d+', cisty_bez_diak)
                     
@@ -47,12 +47,13 @@ def get_litvinov():
                         pozice_start = match_skore.start()
                         pozice_konec = match_skore.end()
                     else:
-                        continue # Pokud tam není čas ani skóre, řádek přeskočíme
+                        continue # Pokud tam není nic z toho, jdeme dál
                     
+                    # Rozdělení na levou (domácí) a pravou (hosté) stranu podle pozice v textu
                     leva_cast = cisty_bez_diak[:pozice_start]
                     prava_cast = cisty_bez_diak[pozice_konec:]
                     
-                    # Seznam extraligových týmů pro spolehlivé parsování
+                    # Seznam extraligových týmů
                     extraliga_tymu = [
                         "Litvinov", "Litvínov", "Verva", "VERVA",
                         "Kometa Brno", "Kometa", "Sparta Praha", "Sparta",
@@ -86,7 +87,7 @@ def get_litvinov():
                     domaci = najdi_tym(leva_cast)
                     hoste = najdi_tym(prava_cast)
                     
-                    # Vrátíme přesně 3 řádky pro displej
+                    # Výsledek přesně do 3 řádků pro displej
                     return f"{domaci}\n{den_cas}\n{hoste}"
             
             return "HC Verva\nZadne info\n-"
