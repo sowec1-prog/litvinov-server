@@ -22,7 +22,6 @@ def aktualizuj_litvinov():
             url = "https://www.hokej.cz/tipsport-extraliga/zapasy"
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
             
-            # Přidán timeout=10, aby to nezamrzlo navěky
             resp = requests.get(url, headers=headers, timeout=10)
             print(f"Status stahovani: {resp.status_code}")
             
@@ -57,12 +56,14 @@ def aktualizuj_litvinov():
                 
                 if not nalezeno:
                     print("VAROVANI: Zadne odpovidajici radek se nepodarilo parsovat.")
-                    litvinov_data = "Litvinov:\nZadne info\n-"
+                    # Změníme text, ať v prohlížeči vidíme, že cyklus doběhl, ale nenašel
+                    litvinov_data = "Litvinov:\nCekam na los\n-"
             else:
-                print(f"Chyba HTTP status: {resp.status_code}")
+                litvinov_data = f"Litvinov:\nHTTP Chyba\n{resp.status_code}"
             
         except Exception as e:
-            print("CHYBA VE VLAKNE:", e)  # Tady se teď vytiskne přesná chyba!
+            print("CHYBA VE VLAKNE:", e)
+            litvinov_data = f"Litvinov:\nChyba kodu\n-"
             
         time.sleep(60)
 
