@@ -70,6 +70,60 @@ def parse_match_row(html_text):
     raise ValueError("Aktuální zápas Litvínova se skóre nebyl v seznamu nalezen")
 
 
+def parse_next_match(html_text):
+    """Vrátí nejbližší nenahraný zápas Litvínova ze seznamu soutěže."""
+    soup = BeautifulSoup(html_text, "html.parser")
+    for row in soup.select("tr.js-preview__link[data-href]"):
+        text = row.get_text(" ", strip=True)
+        plain = odstran_diakritiku(text).lower()
+        if "litvinov" not in plain and "verva" not in plain:
+            continue
+        if row.select("td.preview__score"):
+            continue
+        name_cells = row.select("td.preview__name")
+        names = [cell.select_one("a").get_text(" ", strip=True)
+                 for cell in name_cells if cell.select_one("a")]
+        codes = []
+        for cell in name_cells:
+            found = re.findall(r"\b[A-Z]{3}\b", cell.get_text(" ", strip=True))
+            codes.append(found[-1] if found else "")
+        if len(names) != 2:
+            continue
+        time_cell = row.select_one("td.preview__desktop, td.preview__mobile")
+        match = re.search(r"/zapas/(\d+)", row.get("data-href", ""))
+        return {
+            "state": "scheduled",
+            "match_id": match.group(1) if match else "",
+            "home": names[0],
+            "away": names[1],
+            "home_code": codes[0] if len(codes) > 0 else "",
+            "away_code": codes[1] if len(codes) > 1 else "",
+            "game_clock": time_cell.get_text(" ", strip=True) if time_cell else "Termín se upřesňuje",
+            "score_home": 0,
+            "score_away": 0,
+            "last_goal_scorer": "DALŠÍ ZÁPAS",
+            "last_goal_team": "",
+            "event_id": "",
+            "power_play": "Zápas ještě nezačal",
+            "penalties": [],
+            "source": "hokej.cz program",
+        }
+    raise ValueError("Další zápas Litvínova nebyl v programu nalezen")
+
+
+def match_finished(online_json):
+    comments = online_json.get("comments", {}).get("comment", [])
+    if not isinstance(comments, list):
+        comments = [comments]
+    for item in comments[:12]:
+        attrs = item.get("@attributes", {})
+        if attrs.get("label") == "time" and attrs.get("type") == "end":
+            return True
+        if "konec zapasu" in odstran_diakritiku(message_text(item)).lower():
+            return True
+    return False
+
+
 def game_seconds(value):
     found = re.match(r"^(\d+):(\d{2})$", str(value or ""))
     return int(found.group(1)) * 60 + int(found.group(2)) if found else 0
@@ -186,10 +240,13 @@ def stahni_a_zpracuj():
 
 
 def stahni_live_stav():
-    match = parse_match_row(request_text(HOKEJ_URL))
+    schedule_html = request_text(HOKEJ_URL)
+    match = parse_match_row(schedule_html)
     if not match["match_id"]:
         raise ValueError("Chybí ID zápasu pro textový přenos")
     online = json.loads(request_text(ONLINE_URL.format(**match)))
+    if match_finished(online):
+        return parse_next_match(schedule_html)
     detail_html = request_text(f"https://www.hokej.cz/zapas/{match['match_id']}")
     return extract_live_state(online, match, detail_html)
 
