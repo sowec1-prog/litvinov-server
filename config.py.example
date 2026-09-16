@@ -1,0 +1,4 @@
+# Zkopíruj tento soubor na ESP32 jako config.py a doplň své údaje.
+# config.py je záměrně v .gitignore a nikdy ho nenahrávej na GitHub.
+WIFI_SSID = "NAZEV_WIFI"
+WIFI_PASS = "HESLO_WIFI"

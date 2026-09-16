@@ -1,0 +1,6 @@
+# Local MicroPython Wi-Fi configuration — never commit it.
+config.py
+
+# Python artifacts
+__pycache__/
+*.py[cod]
