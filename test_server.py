@@ -19,6 +19,15 @@ class ServerCacheTests(unittest.TestCase):
             second = server.app.test_client().get("/litvinov")
         self.assertEqual(second.status_code, 200)
         self.assertEqual(second.get_data(as_text=True), good)
+    def test_uses_main_score_cells_not_period_breakdown(self):
+        html = '''<table><tr>
+          <td class="preview__name text-right">HC VERVA Litvínov</td>
+          <td class="preview__score"><span>1</span></td>
+          <td class="preview__period">ST 16. 09. <span>(0:0, 1:0, 0:0)</span></td>
+          <td class="preview__score preview__score--right"><span>0</span></td>
+          <td class="preview__name">HC Kometa Brno</td>
+        </tr></table>'''
+        self.assertEqual(server.zpracuj_html(html), "HC Verva\n1:0\nKometa Brno")
 
 
 if __name__ == "__main__":

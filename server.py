@@ -31,15 +31,28 @@ def zpracuj_html(html):
         if "litvinov" not in text_bez_diak and "verva" not in text_bez_diak:
             continue
 
+        # Hlavní skóre je v samostatných buňkách. Neber první výraz „0:0“
+        # z rozepsaných třetin (např. „(0:0, 1:0, 0:0)“).
+        score_cells = r.select("td.preview__score")
+        hlavni_skore = None
+        if len(score_cells) >= 2:
+            levy_skor = score_cells[0].get_text(strip=True)
+            pravy_skor = score_cells[1].get_text(strip=True)
+            if levy_skor.isdigit() and pravy_skor.isdigit():
+                hlavni_skore = f"{levy_skor}:{pravy_skor}"
+
         match_cas = re.search(
             r"(po|ut|st|ct|pa|so|ne)\.?\s*(\d{1,2}\.\s*\d{1,2}\.)\s*(\d{2}[.:]\d{2})",
             text_bez_diak,
         )
-        match_skore = re.search(r"\d+\s*:\s*\d+", text_bez_diak)
-        if not match_cas and not match_skore:
+        match_skore = re.search(r"\d+\s*:\s*\d+", text_bez_diak) if hlavni_skore is None else None
+        if not match_cas and not hlavni_skore and not match_skore:
             continue
 
-        if match_cas:
+        if hlavni_skore is not None:
+            den_cas = hlavni_skore
+            pozice_start = text_bez_diak.find(levy_skor)
+        elif match_cas:
             den_cas = f"{match_cas.group(1).upper()} {match_cas.group(2)} {match_cas.group(3).replace('.', ':')}"
             pozice_start = match_cas.start()
         else:
