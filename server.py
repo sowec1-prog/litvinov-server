@@ -46,7 +46,13 @@ def request_text(url):
 
 
 def parse_match_row(html_text):
+    """Vrátí nejnovější rozehraný/odehraný zápas Litvínova se skóre z rozpisu.
+
+    Tabulka je řazená chronologicky. První řádek se skóre proto může být včerejší
+    zápas; pro live stav musí přednost dostat poslední řádek se skóre.
+    """
     soup = BeautifulSoup(html_text, "html.parser")
+    matches = []
     for row in soup.find_all("tr"):
         text = row.get_text(" ", strip=True)
         plain = odstran_diakritiku(text).lower()
@@ -62,13 +68,15 @@ def parse_match_row(html_text):
         match = re.search(r"/zapas/(\d+)", href)
         names = [n.get_text(" ", strip=True) for n in row.select("td.preview__name")]
         home, away = (names + ["HC Verva", "Soupeř"])[:2]
-        return {
+        matches.append({
             "match_id": match.group(1) if match else "",
             "home": home,
             "away": away,
             "score_home": int(left),
             "score_away": int(right),
-        }
+        })
+    if matches:
+        return matches[-1]
     raise ValueError("Aktuální zápas Litvínova se skóre nebyl v seznamu nalezen")
 
 
