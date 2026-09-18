@@ -155,6 +155,7 @@ def parse_next_match(html_text):
             "event_id": "",
             "power_play": "Zápas ještě nezačal",
             "penalties": [],
+            "penalty_indicator": "",
             "source": "hokej.cz program",
         }
     raise ValueError("Další zápas Litvínova nebyl v programu nalezen")
@@ -268,6 +269,13 @@ def extract_live_state(online_json, match, match_html=None):
     home_code = home_codes[-1] if home_codes else ""
     away_code = away_codes[-1] if away_codes else ""
 
+    active_codes = []
+    for penalty in active:
+        code = home_code if penalty["team"] == "home" else away_code
+        if code and code not in active_codes:
+            active_codes.append(code)
+    penalty_indicator = "TRES-" + "/".join(active_codes) if active_codes else ""
+
     lit_side = "home" if "litv" in odstran_diakritiku(match["home"]).lower() or "verva" in odstran_diakritiku(match["home"]).lower() else "away"
     audio_cue = ""
     if last_goal["event_id"]:
@@ -289,6 +297,7 @@ def extract_live_state(online_json, match, match_html=None):
         "event_id": last_goal["event_id"] or attrs.get("id", ""),
         "power_play": power_play,
         "penalties": [{"team": p["team"], "player": p["player"]} for p in active],
+        "penalty_indicator": penalty_indicator,
         "source": "hokej.cz textový přenos",
     }
 
