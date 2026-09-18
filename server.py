@@ -201,6 +201,44 @@ def comment_team(comment, home_name):
     return "away"
 
 
+def final_whistle_epoch(online_json):
+    """Cas zaverecne pistalky v Praze; 0 kdyz zdroj cas neposkytne."""
+    comments = online_json.get("comments", {}).get("comment", [])
+    if not isinstance(comments, list):
+        comments = [comments]
+    final_messages = ("konec zapasu", "utkani skoncilo", "zapas skoncil")
+    for item in comments:
+        normalized = odstran_diakritiku(message_text(item)).lower()
+        if not any(phrase in normalized for phrase in final_messages):
+            continue
+        written = item.get("@attributes", {}).get("written", "")
+        try:
+            return int(datetime.strptime(written, "%Y-%m-%d %H:%M:%S").replace(tzinfo=ZoneInfo("Europe/Prague")).timestamp())
+        except ValueError:
+            return 0
+    return 0
+
+
+def finished_payload(match, online_json, finished_at):
+    """Konec zapasu zustane na OLED pet minut, pak se zobrazi dalsi termin."""
+    home_codes = re.findall(r"\b[A-Z]{3}\b", match["home"])
+    away_codes = re.findall(r"\b[A-Z]{3}\b", match["away"])
+    home_code = home_codes[-1] if home_codes else "LIT"
+    away_code = away_codes[-1] if away_codes else "?"
+    return {
+        **match,
+        "state": "finished",
+        "home_code": home_code,
+        "away_code": away_code,
+        "home_display": display_team_name(match["home"], home_code),
+        "away_display": display_team_name(match["away"], away_code),
+        "game_clock": "KONEC ZAPASU",
+        "penalty_indicator": "",
+        "penalties": [],
+        "finished_until_epoch": finished_at + 300,
+    }
+
+
 def parse_last_goal(match_html, home_name):
     soup = BeautifulSoup(match_html, "html.parser")
     goals = []
@@ -378,6 +416,10 @@ def stahni_live_stav():
         raise ValueError("Chybí ID zápasu pro textový přenos")
     online = json.loads(request_text(ONLINE_URL.format(**match)))
     if match_finished(online):
+        finished_at = final_whistle_epoch(online)
+        now_epoch = int(datetime.now(ZoneInfo("Europe/Prague")).timestamp())
+        if finished_at and now_epoch < finished_at + 300:
+            return finished_payload(match, online, finished_at)
         return parse_next_match(schedule_html)
     detail_html = request_text(f"https://www.hokej.cz/zapas/{match['match_id']}")
     return extract_live_state(online, match, detail_html)
