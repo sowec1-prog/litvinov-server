@@ -3,6 +3,7 @@ import html
 import json
 import re
 import time
+from datetime import datetime
 
 import requests
 from bs4 import BeautifulSoup
@@ -70,6 +71,24 @@ def parse_match_row(html_text):
     raise ValueError("Aktuální zápas Litvínova se skóre nebyl v seznamu nalezen")
 
 
+def parse_scheduled_epoch(game_clock):
+    """Převede text programu „PÁ 18. 09. 17:30“ na epochu v Praze."""
+    # Server běží na domácím PC v českém místním čase; nevyžaduje externí databázi pásem.
+    now = datetime.now().astimezone()
+    found = re.search(r"(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{1,2}):(\d{2})", game_clock)
+    if not found:
+        return 0, int(now.timestamp()), False
+    day, month, hour, minute = map(int, found.groups())
+    try:
+        start = datetime(now.year, month, day, hour, minute, tzinfo=now.tzinfo)
+        # Při prosincovém seznamu může nejbližší utkání patřit do dalšího roku.
+        if start.date() < now.date():
+            start = start.replace(year=now.year + 1)
+    except ValueError:
+        return 0, int(now.timestamp()), False
+    return int(start.timestamp()), int(now.timestamp()), start.date() == now.date()
+
+
 def parse_next_match(html_text):
     """Vrátí nejbližší nenahraný zápas Litvínova ze seznamu soutěže."""
     soup = BeautifulSoup(html_text, "html.parser")
@@ -90,6 +109,8 @@ def parse_next_match(html_text):
         if len(names) != 2:
             continue
         time_cell = row.select_one("td.preview__desktop, td.preview__mobile")
+        game_clock = time_cell.get_text(" ", strip=True) if time_cell else "Termín se upřesňuje"
+        start_epoch, server_epoch, is_match_day = parse_scheduled_epoch(game_clock)
         match = re.search(r"/zapas/(\d+)", row.get("data-href", ""))
         return {
             "state": "scheduled",
@@ -98,7 +119,10 @@ def parse_next_match(html_text):
             "away": names[1],
             "home_code": codes[0] if len(codes) > 0 else "",
             "away_code": codes[1] if len(codes) > 1 else "",
-            "game_clock": time_cell.get_text(" ", strip=True) if time_cell else "Termín se upřesňuje",
+            "game_clock": game_clock,
+            "match_start_epoch": start_epoch,
+            "server_epoch": server_epoch,
+            "is_match_day": is_match_day,
             "score_home": 0,
             "score_away": 0,
             "last_goal_scorer": "DALŠÍ ZÁPAS",
