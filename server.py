@@ -241,11 +241,9 @@ def extract_live_state(online_json, match, match_html=None):
             minutes = int(penalty.get("@attributes", {}).get("length", "2") or 2)
             active.append({"team": team, "player": player, "until": game_seconds(item.get("time")) + minutes * 60})
         elif " v plnem poctu" in normalized:
-            # Textový přenos výslovně potvrzuje konec oslabení; odstraníme nejstarší trest týmu.
-            for index, penalty in enumerate(active):
-                if penalty["team"] == team:
-                    active.pop(index)
-                    break
+            # „Pardubice jsou v plném počtu“ / „Litvínov je v plném počtu“
+            # je explicitní konec oslabení: pro OLED zrušíme indikátor trestu daného týmu.
+            active = [penalty for penalty in active if penalty["team"] != team]
         if label == "goal" or "gol" in normalized and ("branka" in normalized or "gól" in text.lower()):
             detail = item.get("details", {}).get("detail", {})
             scorer = detail.get("player1", {}).get("@attributes", {}).get("name", "")
