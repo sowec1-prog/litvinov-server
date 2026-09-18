@@ -90,6 +90,19 @@ def parse_scheduled_epoch(game_clock):
     return int(start.timestamp()), int(now.timestamp()), start.date() == now.date()
 
 
+def display_team_name(name, code):
+    """Zkrátí jméno z tabulky pro 128px OLED: odstraní duplicitní město a kód."""
+    result = re.sub(r"\s+", " ", name).strip()
+    if code:
+        result = re.sub(rf"\s+{re.escape(code)}$", "", result)
+    words = result.split()
+    compact = []
+    for word in words:
+        if not compact or compact[-1].casefold() != word.casefold():
+            compact.append(word)
+    return " ".join(compact)
+
+
 def parse_next_match(html_text):
     """Vrátí nejbližší nenahraný zápas Litvínova ze seznamu soutěže."""
     soup = BeautifulSoup(html_text, "html.parser")
@@ -118,6 +131,8 @@ def parse_next_match(html_text):
             "match_id": match.group(1) if match else "",
             "home": names[0],
             "away": names[1],
+            "home_display": display_team_name(names[0], codes[0] if len(codes) > 0 else ""),
+            "away_display": display_team_name(names[1], codes[1] if len(codes) > 1 else ""),
             "home_code": codes[0] if len(codes) > 0 else "",
             "away_code": codes[1] if len(codes) > 1 else "",
             "game_clock": game_clock,
