@@ -102,7 +102,8 @@ def display_team_name(name, code):
     """Zkrátí jméno z tabulky pro 128px OLED: odstraní duplicitní město a kód."""
     result = re.sub(r"\s+", " ", name).strip()
     if code:
-        result = re.sub(rf"\s+{re.escape(code)}$", "", result)
+        # V live rozpisu mohou za kódem zůstat kurzy; pro OLED vše za kódem odstranit.
+        result = re.sub(rf"\s+{re.escape(code)}(?:\s+.*)?$", "", result)
     words = result.split()
     compact = []
     for word in words:
@@ -262,8 +263,18 @@ def extract_live_state(online_json, match, match_html=None):
     else:
         power_play = "Plný počet 5:5"
 
+    home_codes = re.findall(r"\b[A-Z]{3}\b", match["home"])
+    away_codes = re.findall(r"\b[A-Z]{3}\b", match["away"])
+    home_code = home_codes[-1] if home_codes else ""
+    away_code = away_codes[-1] if away_codes else ""
+
     return {
         **match,
+        "state": "live",
+        "home_code": home_code,
+        "away_code": away_code,
+        "home_display": display_team_name(match["home"], home_code),
+        "away_display": display_team_name(match["away"], away_code),
         "game_clock": current.get("time", ""),
         "score_home": int(attrs.get("score1", match["score_home"])),
         "score_away": int(attrs.get("score2", match["score_away"])),
