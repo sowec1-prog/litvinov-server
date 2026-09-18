@@ -109,7 +109,8 @@ def display_team_name(name, code):
     for word in words:
         if not compact or compact[-1].casefold() != word.casefold():
             compact.append(word)
-    return " ".join(compact)
+    # SSD1306 font v ESP32 nepodporuje českou UTF-8 diakritiku.
+    return odstran_diakritiku(" ".join(compact))
 
 
 def parse_next_match(html_text):
@@ -343,7 +344,7 @@ def extract_live_state(online_json, match, match_html=None):
         "intermission_note": intermission_note,
         "score_home": int(attrs.get("score1", match["score_home"])),
         "score_away": int(attrs.get("score2", match["score_away"])),
-        "last_goal_scorer": last_goal["scorer"],
+        "last_goal_scorer": odstran_diakritiku(last_goal["scorer"]),
         "last_goal_team": last_goal["team"],
         "last_goal_code": home_code if last_goal["team"] == "home" else away_code if last_goal["team"] == "away" else "",
         "event_id": last_goal["event_id"] or attrs.get("id", ""),
