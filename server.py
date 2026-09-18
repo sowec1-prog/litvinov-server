@@ -278,8 +278,9 @@ def extract_live_state(online_json, match, match_html=None):
             # „Pardubice jsou v plném počtu“ / „Litvínov je v plném počtu“
             # je explicitní konec oslabení: pro OLED zrušíme indikátor trestu daného týmu.
             active = [penalty for penalty in active if penalty["team"] != team]
-        if label == "goal" or "gol" in normalized and ("branka" in normalized or "gól" in text.lower()):
-            detail = item.get("details", {}).get("detail", {})
+        if label == "goal":
+            details_block = item.get("details", {})
+            detail = details_block.get("detail", {}) if isinstance(details_block, dict) else {}
             if isinstance(detail, list):
                 detail = next((entry for entry in detail if isinstance(entry, dict)), {})
             if not isinstance(detail, dict):
