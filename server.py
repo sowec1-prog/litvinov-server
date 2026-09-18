@@ -162,14 +162,14 @@ def parse_next_match(html_text):
 
 
 def match_finished(online_json):
+    """Vrací True jen po závěrečném hvizdu, ne po konci 1. nebo 2. třetiny."""
     comments = online_json.get("comments", {}).get("comment", [])
     if not isinstance(comments, list):
         comments = [comments]
+    final_messages = ("konec zapasu", "utkani skoncilo", "zapas skoncil")
     for item in comments[:12]:
-        attrs = item.get("@attributes", {})
-        if attrs.get("label") == "time" and attrs.get("type") == "end":
-            return True
-        if "konec zapasu" in odstran_diakritiku(message_text(item)).lower():
+        normalized = odstran_diakritiku(message_text(item)).lower()
+        if any(phrase in normalized for phrase in final_messages):
             return True
     return False
 
@@ -220,9 +220,17 @@ def extract_live_state(online_json, match, match_html=None):
     if not isinstance(comments, list):
         comments = [comments]
     chronological = list(reversed(comments))
-    current = comments[0] if comments else {"@attributes": {}}
+    newest = comments[0] if comments else {"@attributes": {}}
+    # O přestávce může nejnovější zpráva nést místo času objekt {period: "1INT"}.
+    # Skóre a poslední platný herní čas vezmeme z nejnovějšího řádku MM:SS.
+    current = next((item for item in comments if game_seconds(item.get('time')) or str(item.get('time')) == '00:00'), newest)
     attrs = current.get("@attributes", {})
     now = game_seconds(current.get("time"))
+    newest_time = newest.get("time", "")
+    if isinstance(newest_time, dict) and str(newest_time.get("@attributes", {}).get("period", "")).endswith("INT"):
+        display_clock = "PRESTAVKA"
+    else:
+        display_clock = str(current.get("time", ""))
     active = []
     last_goal = {"scorer": "", "team": "", "event_id": ""}
 
