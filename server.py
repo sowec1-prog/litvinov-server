@@ -271,7 +271,7 @@ def extract_live_state(online_json, match, match_html=None):
                 if isinstance(penalty, list):
                     penalty = penalty[0]
                 minutes = int(penalty.get("@attributes", {}).get("length", "2") or 2)
-                active.append({"team": penalty_team, "player": player, "until": game_seconds(item.get("time")) + minutes * 60, "minor": minutes == 2})
+                active.append({"team": penalty_team, "player": player, "until": game_seconds(item.get("time")) + minutes * 60, "length": minutes})
         elif " v plnem poctu" in normalized:
             # „Pardubice jsou v plném počtu“ / „Litvínov je v plném počtu“
             # je explicitní konec oslabení: pro OLED zrušíme indikátor trestu daného týmu.
@@ -284,13 +284,18 @@ def extract_live_state(online_json, match, match_html=None):
                 detail = {}
             scorer = detail.get("player1", {}).get("@attributes", {}).get("name", "")
             if scorer:
-                # Gól v přesilovce ruší nejstarší dvouminutový trest oslabeného týmu.
-                penalized_team = "home" if any(p["team"] == "home" for p in active) and not any(p["team"] == "away" for p in active) else "away" if any(p["team"] == "away" for p in active) and not any(p["team"] == "home" for p in active) else ""
-                if penalized_team and team != penalized_team:
-                    for index, active_penalty in enumerate(active):
-                        if active_penalty["team"] == penalized_team and active_penalty["minor"]:
-                            active.pop(index)
-                            break
+                # Pravidlo 16.2: jen tým ve skutečném početním oslabení po inkasovaném
+                # gólu ztratí menší trest, a to ten s nejkratším zbývajícím časem.
+                home_minors = [p for p in active if p["team"] == "home" and p["length"] in (2, 4)]
+                away_minors = [p for p in active if p["team"] == "away" and p["length"] in (2, 4)]
+                penalized_team = "home" if len(home_minors) > len(away_minors) and team == "away" else "away" if len(away_minors) > len(home_minors) and team == "home" else ""
+                if penalized_team:
+                    candidate = min(home_minors if penalized_team == "home" else away_minors, key=lambda penalty: penalty["until"])
+                    if candidate["length"] == 2:
+                        active.remove(candidate)
+                    else:  # dvojitý menší: zruší se první dvouminutová část, druhá zůstává.
+                        candidate["length"] = 2
+                        candidate["until"] -= 120
                 last_goal = {"scorer": scorer, "team": team, "event_id": item_attrs.get("id", "")}
 
     active = [p for p in active if p["until"] > now]
