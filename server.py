@@ -4,6 +4,7 @@ import json
 import re
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
@@ -73,8 +74,8 @@ def parse_match_row(html_text):
 
 def parse_scheduled_epoch(game_clock):
     """Převede text programu „PÁ 18. 09. 17:30“ na epochu v Praze."""
-    # Server běží na domácím PC v českém místním čase; nevyžaduje externí databázi pásem.
-    now = datetime.now().astimezone()
+    # Hokejový rozpis je v českém čase; nepřebírat časové pásmo Linux/Render kontejneru.
+    now = datetime.now(ZoneInfo("Europe/Prague"))
     found = re.search(r"(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{1,2}):(\d{2})", game_clock)
     if not found:
         return 0, int(now.timestamp()), False
