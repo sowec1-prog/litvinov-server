@@ -215,6 +215,19 @@ def parse_last_goal(match_html, home_name):
     return {"scorer": scorer, "team": team, "event_id": f"goal-{scorer}-{team}"}
 
 
+def parse_intermission(text):
+    """Vrátí (je_přestávka, epoch_začátku_další_třetiny, stručný text pro OLED)."""
+    found = re.search(r"Dalsi tretina zacne priblizne v\s*(\d{1,2}):(\d{2})", odstran_diakritiku(text), re.IGNORECASE)
+    if not found:
+        return False, 0, ""
+    now = datetime.now(ZoneInfo("Europe/Prague"))
+    hour, minute = map(int, found.groups())
+    start = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if start < now:
+        start = start.replace(day=now.day + 1)
+    return True, int(start.timestamp()), f"PRESTAVKA DO {hour:02d}:{minute:02d}"
+
+
 def extract_live_state(online_json, match, match_html=None):
     comments = online_json.get("comments", {}).get("comment", [])
     if not isinstance(comments, list):
@@ -231,6 +244,11 @@ def extract_live_state(online_json, match, match_html=None):
         display_clock = "PRESTAVKA"
     else:
         display_clock = str(current.get("time", ""))
+    intermission, intermission_until_epoch, intermission_note = parse_intermission(message_text(newest))
+    home_codes = re.findall(r"\b[A-Z]{3}\b", match["home"])
+    away_codes = re.findall(r"\b[A-Z]{3}\b", match["away"])
+    home_code = home_codes[-1] if home_codes else ""
+    away_code = away_codes[-1] if away_codes else ""
     active = []
     last_goal = {"scorer": "", "team": "", "event_id": ""}
 
@@ -241,17 +259,19 @@ def extract_live_state(online_json, match, match_html=None):
         normalized = odstran_diakritiku(text).lower()
         team = comment_team(item, match["home"])
         if label == "penalty":
-            detail = item.get("details", {}).get("detail", {})
-            if isinstance(detail, list):
-                detail = next((entry for entry in detail if isinstance(entry, dict)), {})
-            if not isinstance(detail, dict):
-                detail = {}
-            player = detail.get("player1", {}).get("@attributes", {}).get("name", "hráč")
-            penalty = detail.get("player1", {}).get("penalties", {}).get("penalty", {})
-            if isinstance(penalty, list):
-                penalty = penalty[0]
-            minutes = int(penalty.get("@attributes", {}).get("length", "2") or 2)
-            active.append({"team": team, "player": player, "until": game_seconds(item.get("time")) + minutes * 60})
+            details = item.get("details", {}).get("detail", {})
+            detail_entries = details if isinstance(details, list) else [details]
+            for detail in detail_entries:
+                if not isinstance(detail, dict):
+                    continue
+                penalty_code = detail.get("opponent", {}).get("@attributes", {}).get("code", "")
+                penalty_team = "home" if penalty_code == home_code else "away" if penalty_code == away_code else team
+                player = detail.get("player1", {}).get("@attributes", {}).get("name", "hráč")
+                penalty = detail.get("player1", {}).get("penalties", {}).get("penalty", {})
+                if isinstance(penalty, list):
+                    penalty = penalty[0]
+                minutes = int(penalty.get("@attributes", {}).get("length", "2") or 2)
+                active.append({"team": penalty_team, "player": player, "until": game_seconds(item.get("time")) + minutes * 60, "minor": minutes == 2})
         elif " v plnem poctu" in normalized:
             # „Pardubice jsou v plném počtu“ / „Litvínov je v plném počtu“
             # je explicitní konec oslabení: pro OLED zrušíme indikátor trestu daného týmu.
@@ -264,6 +284,13 @@ def extract_live_state(online_json, match, match_html=None):
                 detail = {}
             scorer = detail.get("player1", {}).get("@attributes", {}).get("name", "")
             if scorer:
+                # Gól v přesilovce ruší nejstarší dvouminutový trest oslabeného týmu.
+                penalized_team = "home" if any(p["team"] == "home" for p in active) and not any(p["team"] == "away" for p in active) else "away" if any(p["team"] == "away" for p in active) and not any(p["team"] == "home" for p in active) else ""
+                if penalized_team and team != penalized_team:
+                    for index, active_penalty in enumerate(active):
+                        if active_penalty["team"] == penalized_team and active_penalty["minor"]:
+                            active.pop(index)
+                            break
                 last_goal = {"scorer": scorer, "team": team, "event_id": item_attrs.get("id", "")}
 
     active = [p for p in active if p["until"] > now]
@@ -303,7 +330,11 @@ def extract_live_state(online_json, match, match_html=None):
         "home_display": display_team_name(match["home"], home_code),
         "away_display": display_team_name(match["away"], away_code),
         "audio_cue": audio_cue,
-        "game_clock": current.get("time", ""),
+        "game_clock": display_clock,
+        "intermission": intermission,
+        "intermission_until_epoch": intermission_until_epoch,
+        "server_epoch": int(datetime.now(ZoneInfo("Europe/Prague")).timestamp()),
+        "intermission_note": intermission_note,
         "score_home": int(attrs.get("score1", match["score_home"])),
         "score_away": int(attrs.get("score2", match["score_away"])),
         "last_goal_scorer": last_goal["scorer"],
