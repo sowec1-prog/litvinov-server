@@ -109,6 +109,10 @@ def display_team_name(name, code):
     for word in words:
         if not compact or compact[-1].casefold() != word.casefold():
             compact.append(word)
+    # Hokej.cz u nekterych tymu opakuje mesto na konci, napr.
+    # "HC Vitkovice Ridera Vitkovice". Zakonny opakovany token odebereme.
+    while len(compact) > 1 and compact[-1].casefold() in {word.casefold() for word in compact[:-1]}:
+        compact.pop()
     # SSD1306 font v ESP32 nepodporuje českou UTF-8 diakritiku.
     return odstran_diakritiku(" ".join(compact))
 
