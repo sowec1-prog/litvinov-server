@@ -268,6 +268,11 @@ def extract_live_state(online_json, match, match_html=None):
     home_code = home_codes[-1] if home_codes else ""
     away_code = away_codes[-1] if away_codes else ""
 
+    lit_side = "home" if "litv" in odstran_diakritiku(match["home"]).lower() or "verva" in odstran_diakritiku(match["home"]).lower() else "away"
+    audio_cue = ""
+    if last_goal["event_id"]:
+        audio_cue = "lit_goal" if last_goal["team"] == lit_side else "conceded_goal"
+
     return {
         **match,
         "state": "live",
@@ -275,6 +280,7 @@ def extract_live_state(online_json, match, match_html=None):
         "away_code": away_code,
         "home_display": display_team_name(match["home"], home_code),
         "away_display": display_team_name(match["away"], away_code),
+        "audio_cue": audio_cue,
         "game_clock": current.get("time", ""),
         "score_home": int(attrs.get("score1", match["score_home"])),
         "score_away": int(attrs.get("score2", match["score_away"])),
