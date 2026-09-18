@@ -234,6 +234,10 @@ def extract_live_state(online_json, match, match_html=None):
         team = comment_team(item, match["home"])
         if label == "penalty":
             detail = item.get("details", {}).get("detail", {})
+            if isinstance(detail, list):
+                detail = next((entry for entry in detail if isinstance(entry, dict)), {})
+            if not isinstance(detail, dict):
+                detail = {}
             player = detail.get("player1", {}).get("@attributes", {}).get("name", "hráč")
             penalty = detail.get("player1", {}).get("penalties", {}).get("penalty", {})
             if isinstance(penalty, list):
@@ -246,6 +250,10 @@ def extract_live_state(online_json, match, match_html=None):
             active = [penalty for penalty in active if penalty["team"] != team]
         if label == "goal" or "gol" in normalized and ("branka" in normalized or "gól" in text.lower()):
             detail = item.get("details", {}).get("detail", {})
+            if isinstance(detail, list):
+                detail = next((entry for entry in detail if isinstance(entry, dict)), {})
+            if not isinstance(detail, dict):
+                detail = {}
             scorer = detail.get("player1", {}).get("@attributes", {}).get("name", "")
             if scorer:
                 last_goal = {"scorer": scorer, "team": team, "event_id": item_attrs.get("id", "")}
