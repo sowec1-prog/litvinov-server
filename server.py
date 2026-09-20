@@ -12,6 +12,9 @@ from bs4 import BeautifulSoup
 app = Flask(__name__)
 
 HOKEJ_URL = "https://www.hokej.cz/tipsport-extraliga/zapasy?matchlist-filter-team=823"
+# Oficiální klubový rozpis je záloha pro případ, kdy hokej.cz po zápase
+# ještě nezveřejní další termín ve svém seznamu.
+VERVA_MATCHES_URL = "https://www.hcverva.cz/matches/MUZ?season=2027"
 ONLINE_URL = "https://s3-eu-west-1.amazonaws.com/hokej.cz/match/2026/short/{match_id}.json"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Litvinov scoreboard; contact: github.com/sowec1-prog/litvinov-server)"}
 RETRY_COUNT = 3
@@ -165,6 +168,68 @@ def parse_next_match(html_text):
             "source": "hokej.cz program",
         }
     raise ValueError("Další zápas Litvínova nebyl v programu nalezen")
+
+
+TEAM_CODES = {
+    "litvinov": "LIT", "vitkovice": "VIT", "sparta": "SPA", "kometa": "KOM",
+    "pardubice": "PCE", "motor cb": "CEB", "liberec": "LIB", "trinec": "TRI",
+    "plzen": "PLZ", "kladno": "KLA", "olomouc": "OLO", "mlada boleslav": "MBL",
+    "karlovy vary": "KVA", "mountfield": "MHK",
+}
+
+
+def club_team_code(name):
+    plain = odstran_diakritiku(name).lower()
+    return next((code for needle, code in TEAM_CODES.items() if needle in plain), "")
+
+
+def parse_verva_next_match(html_text):
+    """Vrátí budoucí zápas z oficiálního rozpisu HC VERVA Litvínov."""
+    soup = BeautifulSoup(html_text, "html.parser")
+    now = datetime.now(ZoneInfo("Europe/Prague"))
+    for row in soup.select("tr.u-clickable"):
+        cells = [cell.get_text(" ", strip=True) for cell in row.find_all("td", recursive=False)]
+        if len(cells) < 6:
+            continue
+        date_text, home, away, time_text = cells[1], cells[3], cells[4], cells[5]
+        found = re.search(r"(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})", date_text)
+        clock = re.fullmatch(r"(\d{1,2}):(\d{2})", time_text)
+        if not found or not clock:
+            continue  # Odehrané utkání má ve sloupci výsledek, ne čas.
+        day, month, year = map(int, found.groups())
+        hour, minute = map(int, clock.groups())
+        try:
+            start = datetime(year, month, day, hour, minute, tzinfo=now.tzinfo)
+        except ValueError:
+            continue
+        if start <= now:
+            continue
+        home_code, away_code = club_team_code(home), club_team_code(away)
+        return {
+            "state": "scheduled",
+            "match_id": f"verva-{start:%Y%m%d}-{odstran_diakritiku(home)}-{odstran_diakritiku(away)}",
+            "home": home,
+            "away": away,
+            "home_display": odstran_diakritiku(home),
+            "away_display": odstran_diakritiku(away),
+            "home_code": home_code,
+            "away_code": away_code,
+            "game_clock": f"{start:%d. %m. %H:%M}",
+            "match_start_epoch": int(start.timestamp()),
+            "server_epoch": int(now.timestamp()),
+            "is_match_day": start.date() == now.date(),
+            "score_home": 0,
+            "score_away": 0,
+            "last_goal_scorer": "DALSI ZAPAS",
+            "last_goal_team": "",
+            "last_goal_code": "",
+            "event_id": "",
+            "power_play": "Zapas jeste nezacal",
+            "penalties": [],
+            "penalty_indicator": "",
+            "source": "oficialni program hcverva.cz",
+        }
+    raise ValueError("Další zápas Litvínova nebyl nalezen ani v oficiálním programu")
 
 
 def match_finished(online_json):
@@ -426,10 +491,15 @@ def stahni_live_stav():
         try:
             return parse_next_match(schedule_html)
         except ValueError:
-            payload = finished_payload(match, online, finished_at or now_epoch)
-            payload["source"] = "hokej.cz poslední výsledek; další termín zatím není zveřejněn"
-            payload["schedule_pending"] = True
-            return payload
+            # Hokej.cz po posledním výsledku někdy další kolo do svého seznamu
+            # nedoplní. Oficiální rozpis klubu obsahuje celý ročník.
+            try:
+                return parse_verva_next_match(request_text(VERVA_MATCHES_URL))
+            except ValueError:
+                payload = finished_payload(match, online, finished_at or now_epoch)
+                payload["source"] = "poslední ověřený výsledek; další termín zatím není zveřejněn"
+                payload["schedule_pending"] = True
+                return payload
     detail_html = request_text(f"https://www.hokej.cz/zapas/{match['match_id']}")
     return extract_live_state(online, match, detail_html)
 
