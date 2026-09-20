@@ -420,7 +420,16 @@ def stahni_live_stav():
         now_epoch = int(datetime.now(ZoneInfo("Europe/Prague")).timestamp())
         if finished_at and now_epoch < finished_at + 300:
             return finished_payload(match, online, finished_at)
-        return parse_next_match(schedule_html)
+        # Rozpis hokej.cz po posledním odehraném utkání nemusí ještě obsahovat
+        # další termín. OLED nesmí kvůli tomu dostat HTTP 503; zobrazí poslední
+        # ověřený výsledek, dokud se další zápas v programu neobjeví.
+        try:
+            return parse_next_match(schedule_html)
+        except ValueError:
+            payload = finished_payload(match, online, finished_at or now_epoch)
+            payload["source"] = "hokej.cz poslední výsledek; další termín zatím není zveřejněn"
+            payload["schedule_pending"] = True
+            return payload
     detail_html = request_text(f"https://www.hokej.cz/zapas/{match['match_id']}")
     return extract_live_state(online, match, detail_html)
 
