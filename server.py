@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 app = Flask(__name__)
 
 HOKEJ_URL = "https://www.hokej.cz/tipsport-extraliga/zapasy?matchlist-filter-team=823"
+STANDINGS_URL = "https://www.hokej.cz/tipsport-extraliga/table"
 # Oficiální klubový rozpis je záloha pro případ, kdy hokej.cz po zápase
 # ještě nezveřejní další termín ve svém seznamu.
 VERVA_MATCHES_URL = "https://www.hcverva.cz/matches/MUZ?season=2027"
@@ -46,6 +47,32 @@ def request_text(url):
             if response is not None:
                 response.close()
     raise last_error
+
+
+def get_litvinov_table_position(html_text):
+    """Vrátí pořadí HC VERVA Litvínov z aktuální extraligové tabulky."""
+    soup = BeautifulSoup(html_text, "html.parser")
+    for row in soup.find_all("tr"):
+        cells = row.find_all("td", recursive=False)
+        if len(cells) < 2:
+            continue
+        club = odstran_diakritiku(cells[1].get_text(" ", strip=True)).lower()
+        if "litvinov" not in club and "verva" not in club:
+            continue
+        found = re.search(r"(\d+)", cells[0].get_text(" ", strip=True))
+        if found:
+            return int(found.group(1))
+    raise ValueError("Pozice HC VERVA Litvínov v extraligové tabulce nebyla nalezena")
+
+
+def add_table_position(payload):
+    """Doplní samostatné malé pole pro horní lištu; výpadek tabulky neshodí skóre."""
+    try:
+        payload["table_position"] = get_litvinov_table_position(request_text(STANDINGS_URL))
+    except (requests.RequestException, ValueError) as error:
+        app.logger.warning("standings request failed: %s", error)
+        payload["table_position"] = None
+    return payload
 
 
 def parse_match_row(html_text):
@@ -526,7 +553,7 @@ def get_litvinov():
 def get_live_status():
     global _last_good_status
     try:
-        _last_good_status = stahni_live_stav()
+        _last_good_status = add_table_position(stahni_live_stav())
         return jsonify(_last_good_status)
     except (requests.RequestException, ValueError) as error:
         app.logger.warning("live status failed after retries: %s", error)
