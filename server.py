@@ -96,7 +96,8 @@ def parse_match_row(html_text):
             continue
         href = row.get("data-href", "")
         match = re.search(r"/zapas/(\d+)", href)
-        names = [n.get_text(" ", strip=True) for n in row.select("td.preview__name")]
+        raw_names = [n.get_text(" ", strip=True) for n in row.select("td.preview__name")]
+        names = [normalize_team_name(name) for name in raw_names]
         home, away = (names + ["HC Verva", "Soupeř"])[:2]
         matches.append({
             "match_id": match.group(1) if match else "",
@@ -128,23 +129,32 @@ def parse_scheduled_epoch(game_clock):
     return int(start.timestamp()), int(now.timestamp()), start.date() == now.date()
 
 
-def display_team_name(name, code):
-    """Zkrátí jméno z tabulky pro 128px OLED: odstraní duplicitní město a kód."""
+TEAM_NAME_ALIASES = {
+    "Banes Motor Č. Budějovice": "Motor Č. Budějovice",
+    "BYD Energie Karlovy Vary": "Energie K.V.",
+}
+
+
+def normalize_team_name(name):
+    """Vrátí jedno stabilní klubové jméno pro API i všechny klienty."""
     result = re.sub(r"\s+", " ", name).strip()
-    if code:
-        # V live rozpisu mohou za kódem zůstat kurzy; pro OLED vše za kódem odstranit.
-        result = re.sub(rf"\s+{re.escape(code)}(?:\s+.*)?$", "", result)
+    # Hokej.cz do buňky přidává třípísmenný kód a někdy i další obsah za ním.
+    result = re.sub(r"\s+\b[A-Z]{3}\b(?:\s+.*)?$", "", result)
     words = result.split()
     compact = []
     for word in words:
         if not compact or compact[-1].casefold() != word.casefold():
             compact.append(word)
-    # Hokej.cz u nekterych tymu opakuje mesto na konci, napr.
-    # "HC Vitkovice Ridera Vitkovice". Zakonny opakovany token odebereme.
+    # Hokej.cz u některých týmů opakuje město na konci, např.
+    # "Banes Motor Č. Budějovice Č. Budějovice".
     while len(compact) > 1 and compact[-1].casefold() in {word.casefold() for word in compact[:-1]}:
         compact.pop()
-    # SSD1306 font v ESP32 nepodporuje českou UTF-8 diakritiku.
-    return odstran_diakritiku(" ".join(compact))
+    return TEAM_NAME_ALIASES.get(" ".join(compact), " ".join(compact))
+
+
+def display_team_name(name, code):
+    """Zkrátí normalizovaný název pro OLED bez UTF-8 diakritiky."""
+    return odstran_diakritiku(normalize_team_name(name))
 
 
 def parse_next_match(html_text):
@@ -158,8 +168,9 @@ def parse_next_match(html_text):
         if row.select("td.preview__score"):
             continue
         name_cells = row.select("td.preview__name")
-        names = [cell.select_one("a").get_text(" ", strip=True)
-                 for cell in name_cells if cell.select_one("a")]
+        raw_names = [cell.select_one("a").get_text(" ", strip=True)
+                     for cell in name_cells if cell.select_one("a")]
+        names = [normalize_team_name(name) for name in raw_names]
         codes = []
         for cell in name_cells:
             found = re.findall(r"\b[A-Z]{3}\b", cell.get_text(" ", strip=True))
@@ -218,7 +229,7 @@ def parse_verva_next_match(html_text):
         cells = [cell.get_text(" ", strip=True) for cell in row.find_all("td", recursive=False)]
         if len(cells) < 6:
             continue
-        date_text, home, away, time_text = cells[1], cells[3], cells[4], cells[5]
+        date_text, home, away, time_text = cells[1], normalize_team_name(cells[3]), normalize_team_name(cells[4]), cells[5]
         found = re.search(r"(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})", date_text)
         clock = re.fullmatch(r"(\d{1,2}):(\d{2})", time_text)
         if not found or not clock:

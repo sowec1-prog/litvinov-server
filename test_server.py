@@ -28,6 +28,30 @@ class ServerCacheTests(unittest.TestCase):
           <td class="preview__name">HC Kometa Brno</td>
         </tr></table>'''
         self.assertEqual(server.zpracuj_html(html), "HC Verva\n1:0\nKometa Brno")
+    def test_normalizes_long_partner_team_names_for_api_and_oled(self):
+        self.assertEqual(
+            server.normalize_team_name("Banes Motor Č. Budějovice Č. Budějovice CEB"),
+            "Motor Č. Budějovice",
+        )
+        self.assertEqual(
+            server.normalize_team_name("BYD Energie Karlovy Vary KVA"),
+            "Energie K.V.",
+        )
+        self.assertEqual(
+            server.display_team_name("Banes Motor Č. Budějovice Č. Budějovice CEB", "CEB"),
+            "Motor C. Budejovice",
+        )
+
+    def test_parses_normalized_team_name_into_api_payload(self):
+        html = '''<table><tr class="js-preview__link" data-href="/zapas/123">
+          <td class="preview__name"><a>Banes Motor Č. Budějovice Č. Budějovice CEB</a></td>
+          <td class="preview__desktop">NE 27. 09. 16:00</td>
+          <td class="preview__name"><a>HC VERVA Litvínov LIT</a></td>
+        </tr></table>'''
+        with patch("server.parse_scheduled_epoch", return_value=(0, 0, False)):
+            match = server.parse_next_match(html)
+        self.assertEqual(match["home"], "Motor Č. Budějovice")
+        self.assertEqual(match["home_display"], "Motor C. Budejovice")
 
 
 if __name__ == "__main__":
