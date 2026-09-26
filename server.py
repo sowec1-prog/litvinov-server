@@ -1,7 +1,10 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+import hmac
 import html
 import json
+import os
 import re
+import secrets
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -20,8 +23,42 @@ ONLINE_URL = "https://s3-eu-west-1.amazonaws.com/hokej.cz/match/2026/short/{matc
 HEADERS = {"User-Agent": "Mozilla/5.0 (Litvinov scoreboard; contact: github.com/sowec1-prog/litvinov-server)"}
 RETRY_COUNT = 3
 REQUEST_TIMEOUT = (5, 15)
+# Tajný klíč je pouze v Render Environment; do GitHubu ani do OLEDu nepatří.
+MANUAL_CUE_ARM_SECONDS = 65
+MANUAL_CUE_TOTAL_SECONDS = 180
 _last_good_payload = None
 _last_good_status = None
+_manual_cue = None
+
+
+def manual_cue_payload(payload):
+    """Vrátí krátký dvoufázový síťový test bzučáku bez příchozího spojení do ESP.
+
+    První fáze pouze nastaví klientům baseline eventu. Druhá změní event ID a
+    firmware již zahraje svou existující znělku lit_goal. Funguje i mimo zápas.
+    """
+    global _manual_cue
+    if _manual_cue is None:
+        return payload
+    now = time.time()
+    if now >= _manual_cue["expires_at"]:
+        _manual_cue = None
+        return payload
+
+    result = dict(payload)
+    result["state"] = "live"  # Stávající OLED zpracovává audio cue jen v live větvi.
+    result["game_clock"] = "TEST ZVUKU"
+    result["intermission"] = False
+    result["penalty_indicator"] = ""
+    result["last_goal_scorer"] = "TEST"
+    result["last_goal_code"] = "LIT"
+    if now < _manual_cue["cue_at"]:
+        result["event_id"] = f"manual-arm-{_manual_cue['id']}"
+        result["audio_cue"] = ""
+    else:
+        result["event_id"] = f"manual-gol-{_manual_cue['id']}"
+        result["audio_cue"] = "lit_goal"
+    return result
 
 
 def odstran_diakritiku(text):
@@ -560,18 +597,40 @@ def get_litvinov():
         return "HC Verva\nChyba spojeni\nZkus to za chvili", 503
 
 
+@app.route("/api/command/gol", methods=["POST"])
+def command_gol():
+    """Bezpečně zařadí jeden vzdálený test znělky pro připojené OLEDy."""
+    global _manual_cue
+    expected_token = os.environ.get("LITVINOV_COMMAND_TOKEN", "")
+    provided_token = request.headers.get("X-Litvinov-Command-Token", "")
+    if not expected_token:
+        app.logger.error("LITVINOV_COMMAND_TOKEN is not configured")
+        return jsonify({"error": "Remote command is not configured"}), 503
+    if not hmac.compare_digest(provided_token, expected_token):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    now = time.time()
+    command_id = secrets.token_urlsafe(12)
+    _manual_cue = {
+        "id": command_id,
+        "cue_at": now + MANUAL_CUE_ARM_SECONDS,
+        "expires_at": now + MANUAL_CUE_TOTAL_SECONDS,
+    }
+    return jsonify({"accepted": True, "command": "gol", "id": command_id}), 202
+
+
 @app.route("/api/live")
 def get_live_status():
     global _last_good_status
     try:
         _last_good_status = add_table_position(stahni_live_stav())
-        return jsonify(_last_good_status)
+        return jsonify(manual_cue_payload(_last_good_status))
     except (requests.RequestException, ValueError) as error:
         app.logger.warning("live status failed after retries: %s", error)
         if _last_good_status is not None:
             cached = dict(_last_good_status)
             cached["cached"] = True
-            return jsonify(cached)
+            return jsonify(manual_cue_payload(cached))
         return jsonify({"error": "Zdroj hokej.cz je dočasně nedostupný"}), 503
 
 
