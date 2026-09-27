@@ -205,6 +205,15 @@ def team_code(name):
     codes = re.findall(r"[A-Z]{3}", name)
     return codes[-1] if codes else ""
 
+
+def team_source_codes(name):
+    """Codes used by hokej.cz details for a named club."""
+    plain = odstran_diakritiku(normalize_team_name(name)).lower()
+    if "motor" in plain or "budejovic" in plain:
+        return {"MOT", "CEB"}
+    code = team_code(name)
+    return {code} if code else set()
+
 def parse_next_match(html_text):
     """Vrátí nejbližší nenahraný zápas Litvínova ze seznamu soutěže."""
     soup = BeautifulSoup(html_text, "html.parser")
@@ -442,6 +451,8 @@ def extract_live_state(online_json, match, match_html=None):
     intermission, intermission_until_epoch, intermission_note = parse_intermission(message_text(newest))
     home_code = team_code(match["home"])
     away_code = team_code(match["away"])
+    home_source_codes = team_source_codes(match["home"])
+    away_source_codes = team_source_codes(match["away"])
     active = []
     last_goal = {"scorer": "", "team": "", "event_id": ""}
 
@@ -458,7 +469,7 @@ def extract_live_state(online_json, match, match_html=None):
                 if not isinstance(detail, dict):
                     continue
                 penalty_code = detail.get("opponent", {}).get("@attributes", {}).get("code", "")
-                penalty_team = "home" if penalty_code == home_code else "away" if penalty_code == away_code else team
+                penalty_team = "home" if penalty_code in home_source_codes else "away" if penalty_code in away_source_codes else team
                 player = detail.get("player1", {}).get("@attributes", {}).get("name", "hráč")
                 penalty = detail.get("player1", {}).get("penalties", {}).get("penalty", {})
                 if isinstance(penalty, list):
@@ -503,6 +514,9 @@ def extract_live_state(online_json, match, match_html=None):
         power_play = f"LIT osl. {max(3, 5-lit_penalties)}:5"
     elif opponent_penalties > lit_penalties:
         power_play = f"LIT pres. 5:{max(3, 5-opponent_penalties)}"
+    elif lit_penalties:
+        players = max(3, 5-lit_penalties)
+        power_play = f"{players} na {players}"
     else:
         power_play = "Plný počet 5:5"
 
