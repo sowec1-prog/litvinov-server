@@ -350,16 +350,19 @@ def message_text(comment):
 
 
 def comment_team(comment, home_name):
+    """Resolve the event team from hokej.cz detail code, not commentary prose."""
     details = comment.get("details", {})
     detail = details.get("detail", {}) if isinstance(details, dict) else {}
+    if isinstance(detail, list):
+        detail = next((entry for entry in detail if isinstance(entry, dict)), {})
     opponent = detail.get("opponent", {}).get("@attributes", {}) if isinstance(detail, dict) else {}
-    if opponent.get("code") == "LIT":
-        return "home" if "litv" in odstran_diakritiku(home_name).lower() or "verva" in odstran_diakritiku(home_name).lower() else "away"
+    source_code = opponent.get("code", "")
+    if source_code:
+        return "home" if source_code in team_source_codes(home_name) else "away"
     text = odstran_diakritiku(message_text(comment)).lower()
     if "litvinov" in text or "verva" in text:
         return "home" if "litv" in odstran_diakritiku(home_name).lower() or "verva" in odstran_diakritiku(home_name).lower() else "away"
     return "away"
-
 
 def final_whistle_epoch(online_json):
     """Cas zaverecne pistalky v Praze; 0 kdyz zdroj cas neposkytne."""
