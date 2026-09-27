@@ -536,9 +536,12 @@ def extract_live_state(online_json, match, match_html=None):
         "intermission_note": intermission_note,
         "score_home": int(attrs.get("score1", match["score_home"])),
         "score_away": int(attrs.get("score2", match["score_away"])),
-        "last_goal_scorer": odstran_diakritiku(last_goal["scorer"]),
+        # OLED firmware displays last_goal_* on its live information row. During
+        # an active power play that row must show the current advantage, not a
+        # stale scorer from an earlier goal. Audio still uses event_id/audio_cue.
+        "last_goal_scorer": power_play if active else odstran_diakritiku(last_goal["scorer"]),
         "last_goal_team": last_goal["team"],
-        "last_goal_code": home_code if last_goal["team"] == "home" else away_code if last_goal["team"] == "away" else "",
+        "last_goal_code": "" if active else home_code if last_goal["team"] == "home" else away_code if last_goal["team"] == "away" else "",
         "event_id": last_goal["event_id"] or attrs.get("id", ""),
         "power_play": power_play,
         "penalties": [{"team": p["team"], "player": p["player"]} for p in active],
