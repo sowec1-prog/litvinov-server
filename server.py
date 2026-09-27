@@ -194,6 +194,17 @@ def display_team_name(name, code):
     return odstran_diakritiku(normalize_team_name(name))
 
 
+
+def team_code(name):
+    """Stable short code even when the live hokej.cz row omits it."""
+    plain = odstran_diakritiku(normalize_team_name(name)).lower()
+    if "litvinov" in plain or "verva" in plain:
+        return "LIT"
+    if "motor" in plain or "budejovic" in plain:
+        return "MOT"
+    codes = re.findall(r"[A-Z]{3}", name)
+    return codes[-1] if codes else ""
+
 def parse_next_match(html_text):
     """Vrátí nejbližší nenahraný zápas Litvínova ze seznamu soutěže."""
     soup = BeautifulSoup(html_text, "html.parser")
@@ -429,10 +440,8 @@ def extract_live_state(online_json, match, match_html=None):
     else:
         display_clock = str(current.get("time", ""))
     intermission, intermission_until_epoch, intermission_note = parse_intermission(message_text(newest))
-    home_codes = re.findall(r"\b[A-Z]{3}\b", match["home"])
-    away_codes = re.findall(r"\b[A-Z]{3}\b", match["away"])
-    home_code = home_codes[-1] if home_codes else ""
-    away_code = away_codes[-1] if away_codes else ""
+    home_code = team_code(match["home"])
+    away_code = team_code(match["away"])
     active = []
     last_goal = {"scorer": "", "team": "", "event_id": ""}
 
@@ -484,21 +493,21 @@ def extract_live_state(online_json, match, match_html=None):
                 last_goal = {"scorer": scorer, "team": team, "event_id": item_attrs.get("id", "")}
 
     active = [p for p in active if p["until"] > now]
-    if not last_goal["scorer"] and match_html:
-        last_goal = parse_last_goal(match_html, match["home"])
+    # A goal event must come only from the semantic label=goal in live JSON.
     home_penalties = sum(p["team"] == "home" for p in active)
     away_penalties = sum(p["team"] == "away" for p in active)
-    if home_penalties > away_penalties:
-        power_play = f"LIT osl. {max(3, 5-home_penalties)}:5"
-    elif away_penalties > home_penalties:
-        power_play = f"LIT pres. 5:{max(3, 5-away_penalties)}"
+    lit_side = "home" if "litv" in odstran_diakritiku(match["home"]).lower() or "verva" in odstran_diakritiku(match["home"]).lower() else "away"
+    lit_penalties = home_penalties if lit_side == "home" else away_penalties
+    opponent_penalties = away_penalties if lit_side == "home" else home_penalties
+    if lit_penalties > opponent_penalties:
+        power_play = f"LIT osl. {max(3, 5-lit_penalties)}:5"
+    elif opponent_penalties > lit_penalties:
+        power_play = f"LIT pres. 5:{max(3, 5-opponent_penalties)}"
     else:
         power_play = "Plný počet 5:5"
 
-    home_codes = re.findall(r"\b[A-Z]{3}\b", match["home"])
-    away_codes = re.findall(r"\b[A-Z]{3}\b", match["away"])
-    home_code = home_codes[-1] if home_codes else ""
-    away_code = away_codes[-1] if away_codes else ""
+    home_code = team_code(match["home"])
+    away_code = team_code(match["away"])
 
     active_codes = []
     for penalty in active:
