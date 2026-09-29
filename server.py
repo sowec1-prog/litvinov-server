@@ -7,6 +7,7 @@ import re
 import secrets
 import time
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import requests
@@ -26,7 +27,20 @@ REQUEST_TIMEOUT = (5, 15)
 # Tajný klíč je pouze v Render Environment; do GitHubu ani do OLEDu nepatří.
 MANUAL_CUE_ARM_SECONDS = 65
 MANUAL_CUE_TOTAL_SECONDS = 180
-_last_good_payload = None
+# Poslední ověřený stav pro krizový start Render instance. Tento soubor je
+# aktualizován pouze ručně po skutečném úspěšném stažení, nikdy se nevymýšlí.
+LEGACY_FALLBACK_PATH = Path(__file__).with_name("legacy_fallback.txt")
+
+
+def load_legacy_fallback() -> str | None:
+    try:
+        payload = LEGACY_FALLBACK_PATH.read_text(encoding="utf-8").strip()
+        return payload if payload.count("\n") >= 2 else None
+    except OSError:
+        return None
+
+
+_last_good_payload = load_legacy_fallback()
 _last_good_status = None
 _manual_cue = None
 
