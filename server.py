@@ -45,6 +45,40 @@ _last_good_status = None
 _manual_cue = None
 
 
+def temporary_source_status():
+    """Bezpečný OLED payload pro první výpadek zdroje po startu instance.
+
+    Nevydává se za aktuální skóre ani termín. Stav ``scheduled`` využije už
+    nasazený firmware bez nového flashování: vykreslí srozumitelnou informaci
+    a při dalším běžném pollu se znovu pokusí načíst ověřená data.
+    """
+    now = int(datetime.now(ZoneInfo("Europe/Prague")).timestamp())
+    return {
+        "state": "scheduled",
+        "match_id": "",
+        "home": "HC VERVA Litvinov",
+        "away": "Zdroj hokej.cz",
+        "home_display": "HC VERVA Litvinov",
+        "away_display": "ZDROJ NEDOSTUPNY",
+        "home_code": "LIT",
+        "away_code": "",
+        "game_clock": "ZKUSIM ZNOVU",
+        "match_start_epoch": 0,
+        "server_epoch": now,
+        "is_match_day": False,
+        "score_home": 0,
+        "score_away": 0,
+        "last_goal_scorer": "",
+        "last_goal_team": "",
+        "last_goal_code": "",
+        "event_id": "",
+        "audio_cue": "",
+        "penalty_indicator": "",
+        "cached": True,
+        "source_unavailable": True,
+    }
+
+
 def manual_cue_payload(payload):
     """Vrátí krátký dvoufázový síťový test bzučáku bez příchozího spojení do ESP.
 
@@ -674,7 +708,10 @@ def get_live_status():
             cached = dict(_last_good_status)
             cached["cached"] = True
             return jsonify(manual_cue_payload(cached))
-        return jsonify({"error": "Zdroj hokej.cz je dočasně nedostupný"}), 503
+        # Po studeném startu ještě nemusí existovat cache. Vrať platný, ale
+        # výslovně neaktuální OLED payload místo HTTP 503, aby panel nezůstal
+        # na obrazovce „Wi-Fi připojena“ a dál samostatně retryoval.
+        return jsonify(manual_cue_payload(temporary_source_status()))
 
 
 if __name__ == "__main__":

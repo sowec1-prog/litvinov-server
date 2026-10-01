@@ -44,6 +44,18 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(second.get_data(as_text=True), good)
 
+    def test_live_api_returns_retry_screen_on_first_upstream_outage(self):
+        client = server.app.test_client()
+        with patch("server.stahni_live_stav", side_effect=requests.exceptions.ReadTimeout("timeout")):
+            response = client.get("/api/live")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["state"], "scheduled")
+        self.assertTrue(payload["cached"])
+        self.assertTrue(payload["source_unavailable"])
+        self.assertEqual(payload["away_display"], "ZDROJ NEDOSTUPNY")
+        self.assertEqual(payload["game_clock"], "ZKUSIM ZNOVU")
+
     def test_uses_main_score_cells_not_period_breakdown(self):
         html = '''<table><tr>
           <td class="preview__name text-right">HC VERVA Litvínov</td>
