@@ -56,6 +56,18 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(payload["away_display"], "ZDROJ NEDOSTUPNY")
         self.assertEqual(payload["game_clock"], "ZKUSIM ZNOVU")
 
+    def test_uses_official_schedule_when_hokej_schedule_is_blocked(self):
+        fallback = {
+            "state": "scheduled", "home_code": "TRI", "away_code": "LIT",
+            "away_display": "HC VERVA Litvinov", "game_clock": "02. 10. 17:00",
+        }
+        with patch("server.request_text", side_effect=[requests.exceptions.HTTPError("403"), "<html></html>"]), \
+             patch("server.parse_verva_next_match", return_value=dict(fallback)) as parse_fallback:
+            status = server.stahni_live_stav()
+        parse_fallback.assert_called_once()
+        self.assertEqual(status["away_code"], "LIT")
+        self.assertIn("oficialni program hcverva.cz", status["source"])
+
     def test_uses_main_score_cells_not_period_breakdown(self):
         html = '''<table><tr>
           <td class="preview__name text-right">HC VERVA Litvínov</td>

@@ -627,8 +627,16 @@ def stahni_a_zpracuj():
 
 
 def stahni_live_stav():
-    schedule_html = request_text(HOKEJ_URL)
-    match = parse_match_row(schedule_html)
+    # Hokej.cz blokuje některé cloudové IP adresy (403), zatímco oficiální
+    # rozpis klubu je dostupný. Mimo právě rozehraný zápas proto zachováme
+    # užitečný a ověřený termín místo prázdného retry stavu.
+    try:
+        schedule_html = request_text(HOKEJ_URL)
+        match = parse_match_row(schedule_html)
+    except (requests.RequestException, ValueError):
+        fallback = parse_verva_next_match(request_text(VERVA_MATCHES_URL))
+        fallback["source"] = "oficialni program hcverva.cz (hokej.cz docasne nedostupne)"
+        return fallback
     if not match["match_id"]:
         raise ValueError("Chybí ID zápasu pro textový přenos")
     online = json.loads(request_text(ONLINE_URL.format(**match)))
