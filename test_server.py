@@ -56,6 +56,11 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(payload["away_display"], "ZDROJ NEDOSTUPNY")
         self.assertEqual(payload["game_clock"], "ZKUSIM ZNOVU")
 
+    def test_reads_table_position_from_official_club_table(self):
+        html = '''<table><tr><td>8.</td><td>HC VERVA Litvínov</td></tr></table>'''
+        self.assertEqual(server.get_litvinov_table_position(html), 8)
+        self.assertEqual(server.STANDINGS_URL, "https://www.hcverva.cz/standings/MUZ")
+
     def test_uses_official_schedule_when_hokej_schedule_is_blocked(self):
         fallback = {
             "state": "scheduled", "home_code": "TRI", "away_code": "LIT",

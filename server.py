@@ -16,7 +16,9 @@ from bs4 import BeautifulSoup
 app = Flask(__name__)
 
 HOKEJ_URL = "https://www.hokej.cz/tipsport-extraliga/zapasy?matchlist-filter-team=823"
-STANDINGS_URL = "https://www.hokej.cz/tipsport-extraliga/table"
+# Oficiální tabulka klubu není z Renderu blokována jako hokej.cz a obsahuje
+# stejný aktuální ligový žebříček.
+STANDINGS_URL = "https://www.hcverva.cz/standings/MUZ"
 # Oficiální klubový rozpis je záloha pro případ, kdy hokej.cz po zápase
 # ještě nezveřejní další termín ve svém seznamu.
 VERVA_MATCHES_URL = "https://www.hcverva.cz/matches/MUZ?season=2027"
