@@ -22,8 +22,15 @@ STANDINGS_URL = "https://www.hcverva.cz/standings/MUZ"
 # Oficiální klubový rozpis je záloha pro případ, kdy hokej.cz po zápase
 # ještě nezveřejní další termín ve svém seznamu.
 VERVA_MATCHES_URL = "https://www.hcverva.cz/matches/MUZ?season=2027"
+# Ověřený odkaz z textového přenosu Hokej.cz pro nejbližší utkání. HTML
+# /on-line stránka sama načítá níže používaný veřejný krátký JSON; token v URL
+# není potřeba ani se neukládá. Záznam je svázaný s datem a dvojicí týmů.
+KNOWN_TEXT_TRANSFER_IDS = {
+    ("2026-10-02", "trinec", "litvinov"): "2928297",
+}
 ONLINE_URL = "https://s3-eu-west-1.amazonaws.com/hokej.cz/match/2026/short/{match_id}.json"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Litvinov scoreboard; contact: github.com/sowec1-prog/litvinov-server)"}
+
 RETRY_COUNT = 3
 REQUEST_TIMEOUT = (5, 15)
 # Tajný klíč je pouze v Render Environment; do GitHubu ani do OLEDu nepatří.
@@ -328,6 +335,17 @@ def club_team_code(name):
     return next((code for needle, code in TEAM_CODES.items() if needle in plain), "")
 
 
+def known_text_transfer_id(match):
+    """Vrátí ověřené ID textového přenosu pro klubový fallback, je-li známé."""
+    start_epoch = int(match.get("match_start_epoch") or 0)
+    if start_epoch <= 0:
+        return ""
+    start_date = datetime.fromtimestamp(start_epoch, ZoneInfo("Europe/Prague")).date().isoformat()
+    home = odstran_diakritiku(match.get("home", "")).casefold()
+    away = odstran_diakritiku(match.get("away", "")).casefold()
+    return KNOWN_TEXT_TRANSFER_IDS.get((start_date, home, away), "")
+
+
 def parse_verva_next_match(html_text):
     """Vrátí budoucí zápas z oficiálního rozpisu HC VERVA Litvínov."""
     soup = BeautifulSoup(html_text, "html.parser")
@@ -347,7 +365,9 @@ def parse_verva_next_match(html_text):
             start = datetime(year, month, day, hour, minute, tzinfo=now.tzinfo)
         except ValueError:
             continue
-        if start <= now:
+        # V den zápasu ponecháme i už rozehrané utkání: jeho ověřené ID může
+        # dál otevřít textový přenos. Extraligový tým nemá dva zápasy v jeden den.
+        if start <= now and start.date() != now.date():
             continue
         home_code, away_code = club_team_code(home), club_team_code(away)
         return {
@@ -628,6 +648,26 @@ def stahni_a_zpracuj():
     return zpracuj_html(request_text(HOKEJ_URL))
 
 
+def fallback_from_club_schedule():
+    """Klubový rozpis + ověřený textový přenos, když Render nedostane Hokej.cz program."""
+    fallback = parse_verva_next_match(request_text(VERVA_MATCHES_URL))
+    fallback["source"] = "oficialni program hcverva.cz (hokej.cz program docasne nedostupny)"
+    transfer_id = known_text_transfer_id(fallback)
+    if not transfer_id:
+        return fallback
+
+    fallback["match_id"] = transfer_id
+    # Před úvodním buly je JSON textového přenosu prázdný; zůstane korektní
+    # naplánovaný stav. Od začátku zápasu jde o stejný veřejný datový zdroj,
+    # který načítá stránka /on-line.
+    if int(time.time()) < fallback["match_start_epoch"]:
+        return fallback
+    online = json.loads(request_text(ONLINE_URL.format(match_id=transfer_id)))
+    if match_finished(online):
+        return finished_payload(fallback, online, final_whistle_epoch(online) or int(time.time()))
+    return extract_live_state(online, fallback)
+
+
 def stahni_live_stav():
     # Hokej.cz blokuje některé cloudové IP adresy (403), zatímco oficiální
     # rozpis klubu je dostupný. Mimo právě rozehraný zápas proto zachováme
@@ -636,9 +676,7 @@ def stahni_live_stav():
         schedule_html = request_text(HOKEJ_URL)
         match = parse_match_row(schedule_html)
     except (requests.RequestException, ValueError):
-        fallback = parse_verva_next_match(request_text(VERVA_MATCHES_URL))
-        fallback["source"] = "oficialni program hcverva.cz (hokej.cz docasne nedostupne)"
-        return fallback
+        return fallback_from_club_schedule()
     if not match["match_id"]:
         raise ValueError("Chybí ID zápasu pro textový přenos")
     online = json.loads(request_text(ONLINE_URL.format(**match)))

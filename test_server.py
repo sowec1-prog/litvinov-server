@@ -1,4 +1,6 @@
 import unittest
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from unittest.mock import patch
 import requests
 import server
@@ -60,6 +62,11 @@ class ServerCacheTests(unittest.TestCase):
         html = '''<table><tr><td>8.</td><td>HC VERVA Litvínov</td></tr></table>'''
         self.assertEqual(server.get_litvinov_table_position(html), 8)
         self.assertEqual(server.STANDINGS_URL, "https://www.hcverva.cz/standings/MUZ")
+
+    def test_uses_known_text_transfer_id_for_trinec_litvinov(self):
+        start = datetime(2026, 10, 2, 17, 0, tzinfo=ZoneInfo("Europe/Prague"))
+        match = {"match_start_epoch": int(start.timestamp()), "home": "Třinec", "away": "Litvínov"}
+        self.assertEqual(server.known_text_transfer_id(match), "2928297")
 
     def test_uses_official_schedule_when_hokej_schedule_is_blocked(self):
         fallback = {
