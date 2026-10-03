@@ -452,8 +452,12 @@ def final_whistle_epoch(online_json):
     return 0
 
 
+# Po závěrečné siréně držíme výsledek 10 minut; potom OLED střídá další termín a logo.
+FINISHED_DISPLAY_SECONDS = 600
+
+
 def finished_payload(match, online_json, finished_at):
-    """Konec zapasu zustane na OLED pet minut, pak se zobrazi dalsi termin."""
+    """Konec zápasu zůstane na OLED 10 minut, pak se vrátí další termín."""
     home_codes = re.findall(r"\b[A-Z]{3}\b", match["home"])
     away_codes = re.findall(r"\b[A-Z]{3}\b", match["away"])
     home_code = home_codes[-1] if home_codes else "LIT"
@@ -468,7 +472,7 @@ def finished_payload(match, online_json, finished_at):
         "game_clock": "KONEC ZAPASU",
         "penalty_indicator": "",
         "penalties": [],
-        "finished_until_epoch": finished_at + 300,
+        "finished_until_epoch": finished_at + FINISHED_DISPLAY_SECONDS,
     }
 
 
@@ -683,7 +687,7 @@ def stahni_live_stav():
     if match_finished(online):
         finished_at = final_whistle_epoch(online)
         now_epoch = int(datetime.now(ZoneInfo("Europe/Prague")).timestamp())
-        if finished_at and now_epoch < finished_at + 300:
+        if finished_at and now_epoch < finished_at + FINISHED_DISPLAY_SECONDS:
             return finished_payload(match, online, finished_at)
         # Rozpis hokej.cz po posledním odehraném utkání nemusí ještě obsahovat
         # další termín. OLED nesmí kvůli tomu dostat HTTP 503; zobrazí poslední

@@ -63,6 +63,14 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(server.get_litvinov_table_position(html), 8)
         self.assertEqual(server.STANDINGS_URL, "https://www.hcverva.cz/standings/MUZ")
 
+    def test_finished_payload_keeps_final_score_for_ten_minutes(self):
+        match = {"home": "HC VERVA Litvinov LIT", "away": "Trinec TRI"}
+        payload = server.finished_payload(match, {}, 1_000_000)
+        self.assertEqual(payload["state"], "finished")
+        self.assertEqual(payload["game_clock"], "KONEC ZAPASU")
+        self.assertEqual(server.FINISHED_DISPLAY_SECONDS, 600)
+        self.assertEqual(payload["finished_until_epoch"], 1_000_600)
+
     def test_uses_known_text_transfer_id_for_trinec_litvinov(self):
         start = datetime(2026, 10, 2, 17, 0, tzinfo=ZoneInfo("Europe/Prague"))
         match = {"match_start_epoch": int(start.timestamp()), "home": "Třinec", "away": "Litvínov"}
