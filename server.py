@@ -554,6 +554,11 @@ def commercial_break_until_epoch(comments, now_epoch=None):
     return 0
 
 
+def intermission_still_active(until_epoch, now_epoch):
+    """Přestávka končí přesně v oznámený čas, ne až dalším komentářem."""
+    return bool(until_epoch) and now_epoch < until_epoch
+
+
 def parse_intermission(text):
     """Vrátí (je_přestávka, epoch_začátku_další_třetiny, stručný text pro OLED)."""
     found = re.search(r"Dalsi tretina zacne priblizne v\s*(\d{1,2}):(\d{2})", odstran_diakritiku(text), re.IGNORECASE)
@@ -593,6 +598,13 @@ def extract_live_state(online_json, match, match_html=None):
             intermission, intermission_until_epoch, intermission_note = parse_intermission(message_text(item))
             if intermission:
                 break
+    now_epoch = int(datetime.now(ZoneInfo("Europe/Prague")).timestamp())
+    if intermission and not intermission_still_active(intermission_until_epoch, now_epoch):
+        # Čas další třetiny je ověřený přímo z konce periody. Po jeho uplynutí
+        # OLED nesmí zůstat na přestávce jen proto, že Hokej.cz komentář zpozdil.
+        intermission, intermission_until_epoch, intermission_note = False, 0, ""
+        if display_clock == "PRESTAVKA":
+            display_clock = "CEKAM NA TEXT"
     commercial_break_until = commercial_break_until_epoch(comments)
     commercial_break = commercial_break_until > 0
     if commercial_break:
@@ -688,7 +700,6 @@ def extract_live_state(online_json, match, match_html=None):
     audio_cue = ""
     if last_goal["event_id"]:
         audio_cue = "lit_goal" if last_goal["team"] == lit_side else "conceded_goal"
-    now_epoch = int(datetime.now(ZoneInfo("Europe/Prague")).timestamp())
     display_goal = last_goal if last_goal["team"] == lit_side or show_opponent_goal_temporarily(last_goal, lit_side, now_epoch) else last_lit_goal
 
     return {

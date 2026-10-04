@@ -156,6 +156,11 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(server.display_period_clock("39:59"), "19:59")
         self.assertEqual(server.display_period_clock("40:01"), "00:01")
 
+    def test_intermission_ends_at_announced_time_without_new_commentary(self):
+        self.assertTrue(server.intermission_still_active(1_000, 999))
+        self.assertFalse(server.intermission_still_active(1_000, 1_000))
+        self.assertFalse(server.intermission_still_active(1_000, 1_001))
+
     def test_intermission_does_not_roll_to_tomorrow_seconds_after_start(self):
         with patch("server.datetime") as clock:
             clock.now.return_value = datetime(2026, 10, 4, 18, 23, 10, tzinfo=ZoneInfo("Europe/Prague"))
