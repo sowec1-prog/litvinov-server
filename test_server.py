@@ -153,6 +153,11 @@ class ServerCacheTests(unittest.TestCase):
     def test_penalty_indicator_uses_full_czech_label(self):
         self.assertEqual("TREST-" + "/".join(["LIT"]), "TREST-LIT")
 
+    def test_overtime_is_detected_and_clock_restarts_after_sixty_minutes(self):
+        comments = [{"time": {"@attributes": {"period": "3INT"}}, "message": "Čeká nás prodloužení."}]
+        self.assertTrue(server.overtime_active(comments))
+        self.assertEqual(server.display_period_clock("60:01"), "00:01")
+
     def test_converts_cumulative_live_clock_to_current_period_clock(self):
         self.assertEqual(server.display_period_clock("19:59"), "19:59")
         self.assertEqual(server.display_period_clock("20:01"), "00:01")

@@ -426,7 +426,9 @@ def message_text(comment):
 def display_period_clock(value):
     """Převede kumulativní čas Hokej.cz na čas právě hrané třetiny."""
     seconds = game_seconds(value)
-    if seconds >= 40 * 60:
+    if seconds >= 60 * 60:
+        seconds -= 60 * 60
+    elif seconds >= 40 * 60:
         seconds -= 40 * 60
     elif seconds >= 20 * 60:
         seconds -= 20 * 60
@@ -554,6 +556,17 @@ def commercial_break_until_epoch(comments, now_epoch=None):
     return 0
 
 
+def overtime_active(comments):
+    """Rozpozná vyhlášené nebo rozehrané prodloužení z veřejného přenosu."""
+    for item in comments[:12]:
+        text = odstran_diakritiku(message_text(item)).lower()
+        if "ceka nas prodlouzeni" in text or "prodlouzeni" in text:
+            return True
+        if game_seconds(item.get("time")) >= 60 * 60:
+            return True
+    return False
+
+
 def intermission_still_active(until_epoch, now_epoch):
     """Přestávka končí přesně v oznámený čas, ne až dalším komentářem."""
     return bool(until_epoch) and now_epoch < until_epoch
@@ -605,6 +618,7 @@ def extract_live_state(online_json, match, match_html=None):
         intermission, intermission_until_epoch, intermission_note = False, 0, ""
         if display_clock == "PRESTAVKA":
             display_clock = "CEKAM NA TEXT"
+    overtime = overtime_active(comments)
     commercial_break_until = commercial_break_until_epoch(comments)
     commercial_break = commercial_break_until > 0
     if commercial_break:
@@ -713,6 +727,7 @@ def extract_live_state(online_json, match, match_html=None):
         "game_clock": display_clock,
         "intermission": intermission,
         "commercial_break": commercial_break,
+        "overtime": overtime,
         "intermission_until_epoch": intermission_until_epoch,
         "server_epoch": int(datetime.now(ZoneInfo("Europe/Prague")).timestamp()),
         "intermission_note": intermission_note,
@@ -721,9 +736,9 @@ def extract_live_state(online_json, match, match_html=None):
         # OLED firmware displays last_goal_* on its live information row. During
         # an active power play that row must show the current advantage, not a
         # stale scorer from an earlier goal. Audio still uses event_id/audio_cue.
-        "last_goal_scorer": power_play if active else odstran_diakritiku(display_goal["scorer"]),
-        "last_goal_team": display_goal["team"],
-        "last_goal_code": "" if active else home_code if display_goal["team"] == "home" else away_code if display_goal["team"] == "away" else "",
+        "last_goal_scorer": power_play if active else "PRODLOUZENI" if overtime else odstran_diakritiku(display_goal["scorer"]),
+        "last_goal_team": "" if overtime else display_goal["team"],
+        "last_goal_code": "" if active or overtime else home_code if display_goal["team"] == "home" else away_code if display_goal["team"] == "away" else "",
         "event_id": last_goal["event_id"] or attrs.get("id", ""),
         "power_play": power_play,
         "penalties": [{"team": p["team"], "player": p["player"]} for p in active],
