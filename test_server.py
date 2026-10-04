@@ -137,6 +137,12 @@ class ServerCacheTests(unittest.TestCase):
         self.assertTrue(server.commercial_break_active([marker, before]))
         self.assertFalse(server.commercial_break_active([resumed, marker, before]))
 
+    def test_converts_cumulative_live_clock_to_current_period_clock(self):
+        self.assertEqual(server.display_period_clock("19:59"), "19:59")
+        self.assertEqual(server.display_period_clock("20:01"), "00:01")
+        self.assertEqual(server.display_period_clock("39:59"), "19:59")
+        self.assertEqual(server.display_period_clock("40:01"), "00:01")
+
     def test_intermission_does_not_roll_to_tomorrow_seconds_after_start(self):
         with patch("server.datetime") as clock:
             clock.now.return_value = datetime(2026, 10, 4, 18, 23, 10, tzinfo=ZoneInfo("Europe/Prague"))

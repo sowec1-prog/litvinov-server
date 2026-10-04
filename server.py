@@ -423,6 +423,16 @@ def message_text(comment):
     return html.unescape(re.sub(r"<[^>]*>", " ", comment.get("message", "")).replace("\n", " ")).strip()
 
 
+def display_period_clock(value):
+    """Převede kumulativní čas Hokej.cz na čas právě hrané třetiny."""
+    seconds = game_seconds(value)
+    if seconds >= 40 * 60:
+        seconds -= 40 * 60
+    elif seconds >= 20 * 60:
+        seconds -= 20 * 60
+    return f"{seconds // 60:02d}:{seconds % 60:02d}" if seconds or str(value) == "00:00" else str(value)
+
+
 def comment_team(comment, home_name):
     """Resolve the event team from hokej.cz detail code, not commentary prose."""
     details = comment.get("details", {})
@@ -539,7 +549,7 @@ def extract_live_state(online_json, match, match_html=None):
     if isinstance(newest_time, dict) and str(newest_time.get("@attributes", {}).get("period", "")).endswith("INT"):
         display_clock = "PRESTAVKA"
     else:
-        display_clock = str(current.get("time", ""))
+        display_clock = display_period_clock(current.get("time", ""))
     # Hokej.cz po oznámení času další třetiny přidává ještě shrnutí periody.
     # Dokud nejnovější položka nese 1INT/2INT, hledáme oznámení v tomtéž bloku.
     intermission, intermission_until_epoch, intermission_note = False, 0, ""
