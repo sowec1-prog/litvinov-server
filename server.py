@@ -475,9 +475,18 @@ OPPONENT_GOAL_DISPLAY_SECONDS = 15
 
 
 def finished_payload(match, online_json, finished_at):
-    """Konec zápasu zůstane na OLED 10 minut, pak se vrátí další termín."""
+    """Konec zápasu zůstane na OLED 10 minut; finální skóre bere z live přenosu."""
     home_code = team_code(match["home"]) or "LIT"
     away_code = team_code(match["away"]) or "?"
+    score_home, score_away = match.get("score_home", 0), match.get("score_away", 0)
+    comments = online_json.get("comments", {}).get("comment", [])
+    if not isinstance(comments, list):
+        comments = [comments]
+    for item in comments:  # Nejnovější (včetně Konec zápasu) je první.
+        attrs = item.get("@attributes", {})
+        if str(attrs.get("score1", "")).isdigit() and str(attrs.get("score2", "")).isdigit():
+            score_home, score_away = int(attrs["score1"]), int(attrs["score2"])
+            break
     return {
         **match,
         "state": "finished",
@@ -485,6 +494,8 @@ def finished_payload(match, online_json, finished_at):
         "away_code": away_code,
         "home_display": display_team_name(match["home"], home_code),
         "away_display": display_team_name(match["away"], away_code),
+        "score_home": score_home,
+        "score_away": score_away,
         "game_clock": "KONEC ZAPASU",
         "penalty_indicator": "",
         "penalties": [],

@@ -63,6 +63,12 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(server.get_litvinov_table_position(html), 8)
         self.assertEqual(server.STANDINGS_URL, "https://www.hcverva.cz/standings/MUZ")
 
+    def test_finished_payload_uses_final_score_from_live_text_not_stale_schedule(self):
+        match = {"home": "HC VERVA Litvínov", "away": "Rytíři Kladno", "score_home": 2, "score_away": 2}
+        online = {"comments": {"comment": [{"@attributes": {"score1": "2", "score2": "3"}, "message": "Konec zápasu."}]}}
+        payload = server.finished_payload(match, online, 1_000)
+        self.assertEqual((payload["score_home"], payload["score_away"]), (2, 3))
+
     def test_finished_payload_keeps_final_score_for_ten_minutes(self):
         match = {"home": "HC VERVA Litvinov LIT", "away": "Trinec TRI"}
         payload = server.finished_payload(match, {}, 1_000_000)
