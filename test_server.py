@@ -137,6 +137,14 @@ class ServerCacheTests(unittest.TestCase):
         self.assertTrue(server.commercial_break_active([marker, before]))
         self.assertFalse(server.commercial_break_active([resumed, marker, before]))
 
+    def test_intermission_does_not_roll_to_tomorrow_seconds_after_start(self):
+        with patch("server.datetime") as clock:
+            clock.now.return_value = datetime(2026, 10, 4, 18, 23, 10, tzinfo=ZoneInfo("Europe/Prague"))
+            active, until, note = server.parse_intermission("Další třetina začne přibližně v 18:23.")
+        self.assertTrue(active)
+        self.assertEqual(note, "PRESTAVKA DO 18:23")
+        self.assertEqual(datetime.fromtimestamp(until, ZoneInfo("Europe/Prague")).date().isoformat(), "2026-10-04")
+
     def test_intermission_survives_newer_period_summary(self):
         summary = {"@attributes": {"score1": "2", "score2": "0"}, "time": {"@attributes": {"period": "1INT"}}, "details": [], "message": "Shrnutí první třetiny."}
         announcement = {"@attributes": {"score1": "2", "score2": "0"}, "time": {"@attributes": {"period": "1INT"}}, "details": [], "message": "Další třetina začne přibližně v 18:23."}

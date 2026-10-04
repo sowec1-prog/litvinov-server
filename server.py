@@ -7,7 +7,7 @@ import re
 import secrets
 import time
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -517,8 +517,10 @@ def parse_intermission(text):
     now = datetime.now(ZoneInfo("Europe/Prague"))
     hour, minute = map(int, found.groups())
     start = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if start < now:
-        start = start.replace(day=now.day + 1)
+    # Po plánovaném začátku o pár sekund nesmí OLED dostat zítřejší datum.
+    # Přes půlnoc se na další den překlápí pouze při skutečně velkém rozdílu.
+    if (now - start).total_seconds() > 12 * 60 * 60:
+        start += timedelta(days=1)
     return True, int(start.timestamp()), f"PRESTAVKA DO {hour:02d}:{minute:02d}"
 
 
