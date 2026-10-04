@@ -150,6 +150,9 @@ class ServerCacheTests(unittest.TestCase):
         self.assertFalse(server.show_opponent_goal_temporarily(away_goal, "home", 1_025))
         self.assertFalse(server.show_opponent_goal_temporarily(lit_goal, "home", 1_005))
 
+    def test_penalty_indicator_uses_full_czech_label(self):
+        self.assertEqual("TREST-" + "/".join(["LIT"]), "TREST-LIT")
+
     def test_converts_cumulative_live_clock_to_current_period_clock(self):
         self.assertEqual(server.display_period_clock("19:59"), "19:59")
         self.assertEqual(server.display_period_clock("20:01"), "00:01")

@@ -695,7 +695,7 @@ def extract_live_state(online_json, match, match_html=None):
         code = home_code if penalty["team"] == "home" else away_code
         if code and code not in active_codes:
             active_codes.append(code)
-    penalty_indicator = "TRES-" + "/".join(active_codes) if active_codes else ""
+    penalty_indicator = "TREST-" + "/".join(active_codes) if active_codes else ""
 
     audio_cue = ""
     if last_goal["event_id"]:
