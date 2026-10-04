@@ -137,6 +137,19 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(server.commercial_break_until_epoch([resumed, marker], now_epoch=start + 20), start + 30)
         self.assertEqual(server.commercial_break_until_epoch([resumed, marker], now_epoch=start + 31), 0)
 
+    def test_finds_last_litvinov_scorer_from_match_detail(self):
+        html = """<table><tr><td>10:00</td><td>LIT</td><td><a href='/hrac/1'>Ondřej Kaše</a></td></tr><tr><td>12:00</td><td>KLA</td><td><a href='/hrac/2'>Niko Ojamäki</a></td></tr></table>"""
+        goal = server.parse_last_goal(html, "HC VERVA Litvínov")
+        self.assertEqual(goal["scorer"], "Ondřej Kaše")
+        self.assertEqual(goal["team"], "home")
+
+    def test_opponent_goal_is_shown_only_for_fifteen_seconds_then_lit_goal_returns(self):
+        lit_goal = {"event_id": "lit", "team": "home", "written_epoch": 1_000}
+        away_goal = {"event_id": "away", "team": "away", "written_epoch": 1_010}
+        self.assertTrue(server.show_opponent_goal_temporarily(away_goal, "home", 1_024))
+        self.assertFalse(server.show_opponent_goal_temporarily(away_goal, "home", 1_025))
+        self.assertFalse(server.show_opponent_goal_temporarily(lit_goal, "home", 1_005))
+
     def test_converts_cumulative_live_clock_to_current_period_clock(self):
         self.assertEqual(server.display_period_clock("19:59"), "19:59")
         self.assertEqual(server.display_period_clock("20:01"), "00:01")

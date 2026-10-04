@@ -469,6 +469,7 @@ def final_whistle_epoch(online_json):
 # Po závěrečné siréně držíme výsledek 10 minut; potom OLED střídá další termín a logo.
 FINISHED_DISPLAY_SECONDS = 600
 COMMERCIAL_BREAK_SECONDS = 30
+OPPONENT_GOAL_DISPLAY_SECONDS = 15
 
 
 def finished_payload(match, online_json, finished_at):
@@ -489,24 +490,47 @@ def finished_payload(match, online_json, finished_at):
     }
 
 
+def comment_written_epoch(comment):
+    written = comment.get("@attributes", {}).get("written", "")
+    try:
+        return int(datetime.strptime(written, "%Y-%m-%d %H:%M:%S").replace(tzinfo=ZoneInfo("Europe/Prague")).timestamp())
+    except ValueError:
+        return 0
+
+
+def show_opponent_goal_temporarily(last_goal, lit_side, now_epoch):
+    """Soupeřův střelec je na OLEDu jen krátce, pak se vrátí poslední LIT gól."""
+    return (
+        bool(last_goal["event_id"])
+        and last_goal["team"] != lit_side
+        and now_epoch < last_goal.get("written_epoch", 0) + OPPONENT_GOAL_DISPLAY_SECONDS
+    )
+
+
 def parse_last_goal(match_html, home_name):
-    soup = BeautifulSoup(match_html, "html.parser")
+    """Poslední střelec domácího Litvínova z detailu zápasu.
+
+    Krátký live JSON po čase nemusí držet starší gólové události; detail zápasu
+    zachová střelce, který se má po krátkém zobrazení soupeřova gólu vrátit.
+    """
+    home_code = team_code(home_name) or "LIT"
     goals = []
+    soup = BeautifulSoup(match_html, "html.parser")
     for row in soup.select("tr"):
         cells = row.find_all("td", recursive=False)
         if len(cells) < 3:
             continue
         timestamp = cells[0].get_text(" ", strip=True)
-        team_code = cells[1].get_text(" ", strip=True).upper()
+        row_code = cells[1].get_text(" ", strip=True).upper()
         player_link = cells[2].select_one('a[href*="/hrac/"]')
-        if not re.match(r"^\d{1,2}:\d{2}$", timestamp) or team_code not in {"LIT", "KOM"} or player_link is None:
+        if not re.match(r"^\d{1,2}:\d{2}$", timestamp) or row_code != home_code or player_link is None:
             continue
         name = re.sub(r"\s*\(\d+\)\s*$", "", player_link.get_text(" ", strip=True)).title()
-        goals.append((game_seconds(timestamp), name, "home" if team_code == "LIT" else "away"))
+        goals.append((game_seconds(timestamp), name))
     if not goals:
-        return {"scorer": "", "team": "", "event_id": ""}
-    _, scorer, team = max(goals, key=lambda goal: goal[0])
-    return {"scorer": scorer, "team": team, "event_id": f"goal-{scorer}-{team}"}
+        return {"scorer": "", "team": "", "event_id": "", "written_epoch": 0}
+    _, scorer = max(goals, key=lambda goal: goal[0])
+    return {"scorer": scorer, "team": "home", "event_id": f"last-lit-goal-{scorer}", "written_epoch": 0}
 
 
 def commercial_break_until_epoch(comments, now_epoch=None):
@@ -578,7 +602,9 @@ def extract_live_state(online_json, match, match_html=None):
     home_source_codes = team_source_codes(match["home"])
     away_source_codes = team_source_codes(match["away"])
     active = []
-    last_goal = {"scorer": "", "team": "", "event_id": ""}
+    lit_side = "home" if "litv" in odstran_diakritiku(match["home"]).lower() or "verva" in odstran_diakritiku(match["home"]).lower() else "away"
+    last_goal = {"scorer": "", "team": "", "event_id": "", "written_epoch": 0}
+    last_lit_goal = {"scorer": "", "team": "", "event_id": "", "written_epoch": 0}
 
     for item in chronological:
         item_attrs = item.get("@attributes", {})
@@ -625,9 +651,14 @@ def extract_live_state(online_json, match, match_html=None):
                     else:  # dvojitý menší: zruší se první dvouminutová část, druhá zůstává.
                         candidate["length"] = 2
                         candidate["until"] -= 120
-                last_goal = {"scorer": scorer, "team": team, "event_id": item_attrs.get("id", "")}
+                goal = {"scorer": scorer, "team": team, "event_id": item_attrs.get("id", ""), "written_epoch": comment_written_epoch(item)}
+                last_goal = goal
+                if team == lit_side:
+                    last_lit_goal = goal
 
     active = [p for p in active if p["until"] > now]
+    if not last_lit_goal["event_id"] and match_html:
+        last_lit_goal = parse_last_goal(match_html, match["home"])
     # A goal event must come only from the semantic label=goal in live JSON.
     home_penalties = sum(p["team"] == "home" for p in active)
     away_penalties = sum(p["team"] == "away" for p in active)
@@ -654,10 +685,11 @@ def extract_live_state(online_json, match, match_html=None):
             active_codes.append(code)
     penalty_indicator = "TRES-" + "/".join(active_codes) if active_codes else ""
 
-    lit_side = "home" if "litv" in odstran_diakritiku(match["home"]).lower() or "verva" in odstran_diakritiku(match["home"]).lower() else "away"
     audio_cue = ""
     if last_goal["event_id"]:
         audio_cue = "lit_goal" if last_goal["team"] == lit_side else "conceded_goal"
+    now_epoch = int(datetime.now(ZoneInfo("Europe/Prague")).timestamp())
+    display_goal = last_goal if last_goal["team"] == lit_side or show_opponent_goal_temporarily(last_goal, lit_side, now_epoch) else last_lit_goal
 
     return {
         **match,
@@ -678,9 +710,9 @@ def extract_live_state(online_json, match, match_html=None):
         # OLED firmware displays last_goal_* on its live information row. During
         # an active power play that row must show the current advantage, not a
         # stale scorer from an earlier goal. Audio still uses event_id/audio_cue.
-        "last_goal_scorer": power_play if active else odstran_diakritiku(last_goal["scorer"]),
-        "last_goal_team": last_goal["team"],
-        "last_goal_code": "" if active else home_code if last_goal["team"] == "home" else away_code if last_goal["team"] == "away" else "",
+        "last_goal_scorer": power_play if active else odstran_diakritiku(display_goal["scorer"]),
+        "last_goal_team": display_goal["team"],
+        "last_goal_code": "" if active else home_code if display_goal["team"] == "home" else away_code if display_goal["team"] == "away" else "",
         "event_id": last_goal["event_id"] or attrs.get("id", ""),
         "power_play": power_play,
         "penalties": [{"team": p["team"], "player": p["player"]} for p in active],
