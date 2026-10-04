@@ -6,6 +6,7 @@ import os
 import re
 import secrets
 import time
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -27,6 +28,7 @@ VERVA_MATCHES_URL = "https://www.hcverva.cz/matches/MUZ?season=2027"
 # není potřeba ani se neukládá. Záznam je svázaný s datem a dvojicí týmů.
 KNOWN_TEXT_TRANSFER_IDS = {
     ("2026-10-02", "trinec", "litvinov"): "2928297",
+    ("2026-10-04", "hc verva litvinov", "rytiri kladno"): "2928307",
 }
 ONLINE_URL = "https://s3-eu-west-1.amazonaws.com/hokej.cz/match/2026/short/{match_id}.json"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Litvinov scoreboard; contact: github.com/sowec1-prog/litvinov-server)"}
@@ -119,10 +121,9 @@ def manual_cue_payload(payload):
 
 
 def odstran_diakritiku(text):
-    return text.translate(str.maketrans(
-        "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ",
-        "acdeeinorstuuyzACDEEINORSTUUYZ",
-    ))
+    """Převede jméno na ASCII pro font OLEDu (KÄMPF → KAMPF)."""
+    text = str(text).replace("ß", "ss").replace("ẞ", "SS")
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
 
 
 def request_text(url):
@@ -253,12 +254,15 @@ def display_team_name(name, code):
 
 
 def team_code(name):
-    """Stable short code even when the live hokej.cz row omits it."""
+    """Stabilní kód týmu i když ho živý řádek Hokej.cz neobsahuje."""
     plain = odstran_diakritiku(normalize_team_name(name)).lower()
     if "litvinov" in plain or "verva" in plain:
         return "LIT"
     if "motor" in plain or "budejovic" in plain:
         return "MOT"
+    known = club_team_code(name)
+    if known:
+        return known
     codes = re.findall(r"[A-Z]{3}", name)
     return codes[-1] if codes else ""
 
@@ -458,10 +462,8 @@ FINISHED_DISPLAY_SECONDS = 600
 
 def finished_payload(match, online_json, finished_at):
     """Konec zápasu zůstane na OLED 10 minut, pak se vrátí další termín."""
-    home_codes = re.findall(r"\b[A-Z]{3}\b", match["home"])
-    away_codes = re.findall(r"\b[A-Z]{3}\b", match["away"])
-    home_code = home_codes[-1] if home_codes else "LIT"
-    away_code = away_codes[-1] if away_codes else "?"
+    home_code = team_code(match["home"]) or "LIT"
+    away_code = team_code(match["away"]) or "?"
     return {
         **match,
         "state": "finished",
@@ -496,6 +498,17 @@ def parse_last_goal(match_html, home_name):
     return {"scorer": scorer, "team": team, "event_id": f"goal-{scorer}-{team}"}
 
 
+def commercial_break_active(comments):
+    """Je aktivní jen od textu o reklamní pauze do další herní události."""
+    for item in comments:  # Hokej.cz řadí nejnovější zprávu jako první.
+        text = odstran_diakritiku(message_text(item)).lower()
+        if "komercni prestavka" in text:
+            return True
+        if game_seconds(item.get("time")) or str(item.get("time")) == "00:00":
+            return False
+    return False
+
+
 def parse_intermission(text):
     """Vrátí (je_přestávka, epoch_začátku_další_třetiny, stručný text pro OLED)."""
     found = re.search(r"Dalsi tretina zacne priblizne v\s*(\d{1,2}):(\d{2})", odstran_diakritiku(text), re.IGNORECASE)
@@ -525,7 +538,17 @@ def extract_live_state(online_json, match, match_html=None):
         display_clock = "PRESTAVKA"
     else:
         display_clock = str(current.get("time", ""))
-    intermission, intermission_until_epoch, intermission_note = parse_intermission(message_text(newest))
+    # Hokej.cz po oznámení času další třetiny přidává ještě shrnutí periody.
+    # Dokud nejnovější položka nese 1INT/2INT, hledáme oznámení v tomtéž bloku.
+    intermission, intermission_until_epoch, intermission_note = False, 0, ""
+    if isinstance(newest_time, dict) and str(newest_time.get("@attributes", {}).get("period", "")).endswith("INT"):
+        for item in comments:
+            intermission, intermission_until_epoch, intermission_note = parse_intermission(message_text(item))
+            if intermission:
+                break
+    commercial_break = commercial_break_active(comments)
+    if commercial_break:
+        intermission, intermission_until_epoch, intermission_note = True, 0, "$ KOMERCNI PRESTAVKA"
     home_code = team_code(match["home"])
     away_code = team_code(match["away"])
     home_source_codes = team_source_codes(match["home"])
@@ -622,6 +645,7 @@ def extract_live_state(online_json, match, match_html=None):
         "audio_cue": audio_cue,
         "game_clock": display_clock,
         "intermission": intermission,
+        "commercial_break": commercial_break,
         "intermission_until_epoch": intermission_until_epoch,
         "server_epoch": int(datetime.now(ZoneInfo("Europe/Prague")).timestamp()),
         "intermission_note": intermission_note,

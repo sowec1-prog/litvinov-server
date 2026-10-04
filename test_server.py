@@ -124,5 +124,34 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(match["home_display"], "Motor C. Budejovice")
 
 
+    def test_ascii_normalizes_german_umlauts_for_oled(self):
+        self.assertEqual(server.odstran_diakritiku("KÄMPF Kämpf Größ"), "KAMPF Kampf Gross")
+
+    def test_uses_known_short_code_for_kladno_without_source_code(self):
+        self.assertEqual(server.team_code("Rytíři Kladno"), "KLA")
+
+    def test_commercial_break_starts_on_marker_and_ends_on_next_game_event(self):
+        marker = {"time": "15:27", "message": "Hra je přerušena a následuje komerční přestávka."}
+        before = {"time": "15:04", "message": "Běžná herní akce."}
+        resumed = {"time": "15:51", "message": "Další herní akce po přestávce."}
+        self.assertTrue(server.commercial_break_active([marker, before]))
+        self.assertFalse(server.commercial_break_active([resumed, marker, before]))
+
+    def test_intermission_survives_newer_period_summary(self):
+        summary = {"@attributes": {"score1": "2", "score2": "0"}, "time": {"@attributes": {"period": "1INT"}}, "details": [], "message": "Shrnutí první třetiny."}
+        announcement = {"@attributes": {"score1": "2", "score2": "0"}, "time": {"@attributes": {"period": "1INT"}}, "details": [], "message": "Další třetina začne přibližně v 18:23."}
+        match = {"home": "HC VERVA Litvínov", "away": "Rytíři Kladno", "score_home": 0, "score_away": 0, "match_id": "2928307"}
+        with patch("server.datetime") as clock:
+            clock.now.return_value = datetime(2026, 10, 4, 18, 5, tzinfo=ZoneInfo("Europe/Prague"))
+            payload = server.extract_live_state({"comments": {"comment": [summary, announcement]}}, match)
+        self.assertTrue(payload["intermission"])
+        self.assertEqual(payload["intermission_note"], "PRESTAVKA DO 18:23")
+
+    def test_uses_known_text_transfer_id_for_litvinov_kladno(self):
+        start = datetime(2026, 10, 4, 17, 30, tzinfo=ZoneInfo("Europe/Prague"))
+        match = {"match_start_epoch": int(start.timestamp()), "home": "HC VERVA Litvínov", "away": "Rytíři Kladno"}
+        self.assertEqual(server.known_text_transfer_id(match), "2928307")
+
+
 if __name__ == "__main__":
     unittest.main()
