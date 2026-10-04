@@ -130,12 +130,12 @@ class ServerCacheTests(unittest.TestCase):
     def test_uses_known_short_code_for_kladno_without_source_code(self):
         self.assertEqual(server.team_code("Rytíři Kladno"), "KLA")
 
-    def test_commercial_break_starts_on_marker_and_ends_on_next_game_event(self):
-        marker = {"time": "15:27", "message": "Hra je přerušena a následuje komerční přestávka."}
-        before = {"time": "15:04", "message": "Běžná herní akce."}
-        resumed = {"time": "15:51", "message": "Další herní akce po přestávce."}
-        self.assertTrue(server.commercial_break_active([marker, before]))
-        self.assertFalse(server.commercial_break_active([resumed, marker, before]))
+    def test_commercial_break_is_fixed_thirty_seconds_from_marker(self):
+        marker = {"@attributes": {"written": "2026-10-04 18:00:00"}, "time": "15:27", "message": "Hra je přerušena a následuje komerční přestávka."}
+        resumed = {"@attributes": {"written": "2026-10-04 18:00:10"}, "time": "15:51", "message": "Další herní akce."}
+        start = int(datetime(2026, 10, 4, 18, 0, 0, tzinfo=ZoneInfo("Europe/Prague")).timestamp())
+        self.assertEqual(server.commercial_break_until_epoch([resumed, marker], now_epoch=start + 20), start + 30)
+        self.assertEqual(server.commercial_break_until_epoch([resumed, marker], now_epoch=start + 31), 0)
 
     def test_converts_cumulative_live_clock_to_current_period_clock(self):
         self.assertEqual(server.display_period_clock("19:59"), "19:59")

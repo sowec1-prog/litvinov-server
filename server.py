@@ -468,6 +468,7 @@ def final_whistle_epoch(online_json):
 
 # Po závěrečné siréně držíme výsledek 10 minut; potom OLED střídá další termín a logo.
 FINISHED_DISPLAY_SECONDS = 600
+COMMERCIAL_BREAK_SECONDS = 30
 
 
 def finished_payload(match, online_json, finished_at):
@@ -508,15 +509,25 @@ def parse_last_goal(match_html, home_name):
     return {"scorer": scorer, "team": team, "event_id": f"goal-{scorer}-{team}"}
 
 
-def commercial_break_active(comments):
-    """Je aktivní jen od textu o reklamní pauze do další herní události."""
-    for item in comments:  # Hokej.cz řadí nejnovější zprávu jako první.
-        text = odstran_diakritiku(message_text(item)).lower()
-        if "komercni prestavka" in text:
-            return True
-        if game_seconds(item.get("time")) or str(item.get("time")) == "00:00":
-            return False
-    return False
+def commercial_break_until_epoch(comments, now_epoch=None):
+    """Pevný 30s interval od poslední zprávy „komerční přestávka“.
+
+    Textový přenos nemá samostatnou událost konce pauzy. Čas se proto kotví do
+    timestampu Hokej.cz, aby se při každém pollu neprodloužil znovu o 30 sekund.
+    """
+    if now_epoch is None:
+        now_epoch = int(datetime.now(ZoneInfo("Europe/Prague")).timestamp())
+    for item in comments:  # Nejnovější zpráva je první.
+        if "komercni prestavka" not in odstran_diakritiku(message_text(item)).lower():
+            continue
+        written = item.get("@attributes", {}).get("written", "")
+        try:
+            started = datetime.strptime(written, "%Y-%m-%d %H:%M:%S").replace(tzinfo=ZoneInfo("Europe/Prague"))
+        except ValueError:
+            return 0
+        until = int((started + timedelta(seconds=COMMERCIAL_BREAK_SECONDS)).timestamp())
+        return until if now_epoch < until else 0
+    return 0
 
 
 def parse_intermission(text):
@@ -558,9 +569,10 @@ def extract_live_state(online_json, match, match_html=None):
             intermission, intermission_until_epoch, intermission_note = parse_intermission(message_text(item))
             if intermission:
                 break
-    commercial_break = commercial_break_active(comments)
+    commercial_break_until = commercial_break_until_epoch(comments)
+    commercial_break = commercial_break_until > 0
     if commercial_break:
-        intermission, intermission_until_epoch, intermission_note = True, 0, "$ KOMERCNI PRESTAVKA"
+        intermission, intermission_until_epoch, intermission_note = True, commercial_break_until, "$ KOMERCNI PRESTAVKA"
     home_code = team_code(match["home"])
     away_code = team_code(match["away"])
     home_source_codes = team_source_codes(match["home"])
