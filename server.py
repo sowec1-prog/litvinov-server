@@ -227,6 +227,7 @@ def parse_scheduled_epoch(game_clock):
 TEAM_NAME_ALIASES = {
     "Banes Motor Č. Budějovice": "Motor Č. Budějovice",
     "BYD Energie Karlovy Vary": "Energie K.V.",
+    "Mountfield HK Hradec Králové": "Mountfield HK",
 }
 
 
