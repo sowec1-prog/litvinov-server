@@ -82,6 +82,14 @@ class ServerCacheTests(unittest.TestCase):
         match = {"match_start_epoch": int(start.timestamp()), "home": "Třinec", "away": "Litvínov"}
         self.assertEqual(server.known_text_transfer_id(match), "2928297")
 
+    def test_verva_fallback_uses_short_oled_team_name(self):
+        html = '''<table><tr class="u-clickable">
+          <td>1</td><td>15. 10. 2026</td><td>Extraliga</td>
+          <td>HC VERVA Litvínov</td><td>Mountfield HK Hr. Kralove</td><td>17:30</td>
+        </tr></table>'''
+        match = server.parse_verva_next_match(html)
+        self.assertEqual(match["away_display"], "Mountfield HK")
+
     def test_uses_official_schedule_when_hokej_schedule_is_blocked(self):
         fallback = {
             "state": "scheduled", "home_code": "TRI", "away_code": "LIT",
