@@ -121,6 +121,10 @@ class ServerCacheTests(unittest.TestCase):
             server.display_team_name("Mountfield HK Hradec Králové MHK", "MHK"),
             "Mountfield HK",
         )
+        self.assertEqual(
+            server.display_team_name("Mountfield HK Hr. Kralove", "MHK"),
+            "Mountfield HK",
+        )
 
     def test_parses_normalized_team_name_into_api_payload(self):
         html = '''<table><tr class="js-preview__link" data-href="/zapas/123">
