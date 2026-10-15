@@ -404,11 +404,21 @@ def parse_verva_next_match(html_text):
     raise ValueError("Další zápas Litvínova nebyl nalezen ani v oficiálním programu")
 
 
-def match_finished(online_json):
-    """Vrací True jen po závěrečném hvizdu, ne po konci 1. nebo 2. třetiny."""
+def live_comments(online_json):
+    """Normalizuje komentáře Hokej.cz a zahodí neudálostní textové položky.
+
+    Zdroj občas vloží do seznamu ``comments.comment`` obyčejný řetězec. Ten
+    není sportovní událost a nesmí shodit celý live payload při volání ``.get``.
+    """
     comments = online_json.get("comments", {}).get("comment", [])
     if not isinstance(comments, list):
         comments = [comments]
+    return [item for item in comments if isinstance(item, dict)]
+
+
+def match_finished(online_json):
+    """Vrací True jen po závěrečném hvizdu, ne po konci 1. nebo 2. třetiny."""
+    comments = live_comments(online_json)
     final_messages = ("konec zapasu", "utkani skoncilo", "zapas skoncil")
     for item in comments[:12]:
         normalized = odstran_diakritiku(message_text(item)).lower()
@@ -455,9 +465,7 @@ def comment_team(comment, home_name):
 
 def final_whistle_epoch(online_json):
     """Cas zaverecne pistalky v Praze; 0 kdyz zdroj cas neposkytne."""
-    comments = online_json.get("comments", {}).get("comment", [])
-    if not isinstance(comments, list):
-        comments = [comments]
+    comments = live_comments(online_json)
     final_messages = ("konec zapasu", "utkani skoncilo", "zapas skoncil")
     for item in comments:
         normalized = odstran_diakritiku(message_text(item)).lower()
@@ -482,9 +490,7 @@ def finished_payload(match, online_json, finished_at):
     home_code = team_code(match["home"]) or "LIT"
     away_code = team_code(match["away"]) or "?"
     score_home, score_away = match.get("score_home", 0), match.get("score_away", 0)
-    comments = online_json.get("comments", {}).get("comment", [])
-    if not isinstance(comments, list):
-        comments = [comments]
+    comments = live_comments(online_json)
     for item in comments:  # Nejnovější (včetně Konec zápasu) je první.
         attrs = item.get("@attributes", {})
         if str(attrs.get("score1", "")).isdigit() and str(attrs.get("score2", "")).isdigit():
@@ -602,9 +608,7 @@ def parse_intermission(text):
 
 
 def extract_live_state(online_json, match, match_html=None):
-    comments = online_json.get("comments", {}).get("comment", [])
-    if not isinstance(comments, list):
-        comments = [comments]
+    comments = live_comments(online_json)
     chronological = list(reversed(comments))
     newest = comments[0] if comments else {"@attributes": {}}
     # O přestávce může nejnovější zpráva nést místo času objekt {period: "1INT"}.

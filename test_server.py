@@ -150,6 +150,21 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(match["home_display"], "Motor C. Budejovice")
 
 
+    def test_live_payload_ignores_string_metadata_from_hokej_comments(self):
+        match = {
+            "home": "HC VERVA Litvínov", "away": "Mountfield HK",
+            "score_home": 0, "score_away": 0, "match_id": "2928329",
+        }
+        online = {"comments": {"comment": [
+            "nevalidni textova polozka od zdroje",
+            {"@attributes": {"id": "event-1", "label": "normal", "score1": "1", "score2": "0"},
+             "time": "01:23", "message": "Hra pokracuje.", "details": {}},
+        ]}}
+        payload = server.extract_live_state(online, match)
+        self.assertEqual(payload["state"], "live")
+        self.assertEqual((payload["score_home"], payload["score_away"]), (1, 0))
+        self.assertEqual(payload["event_id"], "event-1")
+
     def test_ascii_normalizes_german_umlauts_for_oled(self):
         self.assertEqual(server.odstran_diakritiku("KÄMPF Kämpf Größ"), "KAMPF Kampf Gross")
 
