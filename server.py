@@ -225,6 +225,7 @@ def parse_scheduled_epoch(game_clock):
 
 
 TEAM_NAME_ALIASES = {
+    "Litvínov": "HC VERVA Litvínov",
     "Banes Motor Č. Budějovice": "Motor Č. Budějovice",
     "BYD Energie Karlovy Vary": "Energie K.V.",
     "BYD Energie KV": "Energie K.V.",
