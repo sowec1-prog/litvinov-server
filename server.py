@@ -16,7 +16,9 @@ from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-HOKEJ_URL = "https://www.hokej.cz/tipsport-extraliga/zapasy?matchlist-filter-team=823"
+# Hokej.cz rozlišuje velké `L` v parametru matchList. Bez explicitní sezóny
+# může vrátit archiv místo aktuálního rozpisu a nenajde se příští zápas.
+HOKEJ_URL = "https://www.hokej.cz/tipsport-extraliga/zapasy?matchList-filter-season=2026&matchList-filter-team=823"
 # Oficiální tabulka klubu není z Renderu blokována jako hokej.cz a obsahuje
 # stejný aktuální ligový žebříček.
 STANDINGS_URL = "https://www.hcverva.cz/standings/MUZ"
