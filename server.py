@@ -227,6 +227,7 @@ def parse_scheduled_epoch(game_clock):
 TEAM_NAME_ALIASES = {
     "Banes Motor Č. Budějovice": "Motor Č. Budějovice",
     "BYD Energie Karlovy Vary": "Energie K.V.",
+    "BYD Energie KV": "Energie K.V.",
     "Mountfield HK Hradec Králové": "Mountfield HK",
     "Mountfield HK Hr. Králové": "Mountfield HK",
     "Mountfield HK Hr. Kralove": "Mountfield HK",
@@ -333,7 +334,7 @@ TEAM_CODES = {
     "litvinov": "LIT", "vitkovice": "VIT", "sparta": "SPA", "kometa": "KOM",
     "pardubice": "PCE", "motor cb": "CEB", "liberec": "LIB", "trinec": "TRI",
     "plzen": "PLZ", "kladno": "KLA", "olomouc": "OLO", "mlada boleslav": "MBL",
-    "karlovy vary": "KVA", "mountfield": "MHK",
+    "karlovy vary": "KVA", "energie kv": "KVA", "energie k.v.": "KVA", "mountfield": "MHK",
 }
 
 
