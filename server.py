@@ -467,6 +467,41 @@ def comment_team(comment, home_name):
         return "home" if "litv" in odstran_diakritiku(home_name).lower() or "verva" in odstran_diakritiku(home_name).lower() else "away"
     return "away"
 
+def empty_net_status(comments, home_name, away_name):
+    """Return the current pulled-goalie status from recent Hokej.cz commentary.
+
+    The source uses prose rather than a structured goalie flag.  Comments arrive
+    newest-first, so a newer return-to-goal message cancels an older pull.  Team
+    resolution uses the generic home/away wording first and falls back to a team
+    name token; it is deliberately not tied to Litvínov or Karlovy Vary.
+    """
+    clear_markers = ("vraci se do branky", "se vraci do branky", "vratil se do branky", "brankar je zpet", "zpet v brance")
+    pull_markers = ("branka hostu je prazdna", "branka domacich je prazdna", "prazdna branka", "bez brankare", "sesti bruslari", "odvolal brankare")
+    ignored_tokens = {"hc", "hokejovy", "klub", "verva"}
+
+    def mentioned_side(normalized):
+        if "host" in normalized:
+            return "away"
+        if "domac" in normalized:
+            return "home"
+        for side, name in (("home", home_name), ("away", away_name)):
+            tokens = [token for token in re.findall(r"[a-z0-9]+", odstran_diakritiku(name).lower()) if len(token) >= 4 and token not in ignored_tokens]
+            if any(token in normalized for token in tokens):
+                return side
+        return ""
+
+    for item in comments:
+        normalized = odstran_diakritiku(message_text(item)).lower()
+        if any(marker in normalized for marker in clear_markers):
+            return ""
+        if any(marker in normalized for marker in pull_markers):
+            side = mentioned_side(normalized)
+            if side:
+                code = team_code(home_name if side == "home" else away_name)
+                return f"{code} PRAZDNA BRANA" if code else "PRAZDNA BRANA"
+    return ""
+
+
 def final_whistle_epoch(online_json):
     """Cas zaverecne pistalky v Praze; 0 kdyz zdroj cas neposkytne."""
     comments = live_comments(online_json)
@@ -732,6 +767,7 @@ def extract_live_state(online_json, match, match_html=None):
         if code and code not in active_codes:
             active_codes.append(code)
     penalty_indicator = "TREST-" + "/".join(active_codes) if active_codes else ""
+    empty_net = empty_net_status(comments, match["home"], match["away"])
 
     audio_cue = ""
     if last_goal["event_id"]:
@@ -758,9 +794,11 @@ def extract_live_state(online_json, match, match_html=None):
         # OLED firmware displays last_goal_* on its live information row. During
         # an active power play that row must show the current advantage, not a
         # stale scorer from an earlier goal. Audio still uses event_id/audio_cue.
-        "last_goal_scorer": power_play if active else "PRODLOUZENI" if overtime else odstran_diakritiku(display_goal["scorer"]),
-        "last_goal_team": "" if overtime else display_goal["team"],
-        "last_goal_code": "" if active or overtime else home_code if display_goal["team"] == "home" else away_code if display_goal["team"] == "away" else "",
+        # Empty net gets precedence so it is visible even if the opponent has an
+        # active penalty; a numeric 6:5 is intentionally not guessed from prose.
+        "last_goal_scorer": empty_net or power_play if active else empty_net or "PRODLOUZENI" if overtime else odstran_diakritiku(display_goal["scorer"]),
+        "last_goal_team": "" if (empty_net or overtime) else display_goal["team"],
+        "last_goal_code": "" if (empty_net or active or overtime) else home_code if display_goal["team"] == "home" else away_code if display_goal["team"] == "away" else "",
         "event_id": last_goal["event_id"] or attrs.get("id", ""),
         "power_play": power_play,
         "penalties": [{"team": p["team"], "player": p["player"]} for p in active],

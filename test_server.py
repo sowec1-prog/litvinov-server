@@ -84,7 +84,7 @@ class ServerCacheTests(unittest.TestCase):
 
     def test_verva_fallback_uses_short_oled_team_name(self):
         html = '''<table><tr class="u-clickable">
-          <td>1</td><td>15. 10. 2026</td><td>Extraliga</td>
+          <td>1</td><td>15. 10. 2099</td><td>Extraliga</td>
           <td>HC VERVA Litvínov</td><td>Mountfield HK Hr. Kralove</td><td>17:30</td>
         </tr></table>'''
         match = server.parse_verva_next_match(html)
@@ -164,6 +164,20 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(payload["state"], "live")
         self.assertEqual((payload["score_home"], payload["score_away"]), (1, 0))
         self.assertEqual(payload["event_id"], "event-1")
+
+    def test_empty_net_status_uses_latest_unresolved_goalie_pull(self):
+        comments = [
+            {"@attributes": {"id": "new", "label": "normal"}, "time": "58:40", "details": [], "message": "Litvínov je v plném počtu."},
+            {"@attributes": {"id": "pull", "label": "important"}, "time": "58:20", "details": [], "message": "Branka hostů je prázdná, Energie to zkouší se šesti bruslači v poli."},
+        ]
+        self.assertEqual(server.empty_net_status(comments, "HC VERVA Litvínov", "HC Energie Karlovy Vary"), "KVA PRAZDNA BRANA")
+
+    def test_empty_net_status_clears_when_goalie_returns(self):
+        comments = [
+            {"@attributes": {"id": "return", "label": "normal"}, "time": "59:10", "details": [], "message": "Petr Tomek se vrací do branky."},
+            {"@attributes": {"id": "pull", "label": "important"}, "time": "58:20", "details": [], "message": "Branka hostů je prázdná."},
+        ]
+        self.assertEqual(server.empty_net_status(comments, "HC VERVA Litvínov", "HC Energie Karlovy Vary"), "")
 
     def test_ascii_normalizes_german_umlauts_for_oled(self):
         self.assertEqual(server.odstran_diakritiku("KÄMPF Kämpf Größ"), "KAMPF Kampf Gross")
