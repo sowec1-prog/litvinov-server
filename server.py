@@ -234,6 +234,9 @@ TEAM_NAME_ALIASES = {
     "Mountfield HK Hradec Králové": "Mountfield HK",
     "Mountfield HK Hr. Králové": "Mountfield HK",
     "Mountfield HK Hr. Kralove": "Mountfield HK",
+    "Plzeň": "HC ŠKODA Plzeň",
+    "HC Škoda Plzeň": "HC ŠKODA Plzeň",
+    "HC ŠKODA Plzeň": "HC ŠKODA Plzeň",
 }
 
 
