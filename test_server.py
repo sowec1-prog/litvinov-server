@@ -90,6 +90,11 @@ class ServerCacheTests(unittest.TestCase):
         match = server.parse_verva_next_match(html)
         self.assertEqual(match["away_display"], "Mountfield HK")
 
+    def test_hokej_schedule_url_is_canonical_and_skips_redirect(self):
+        self.assertIn("matchList-filter-season=2026", server.HOKEJ_URL)
+        self.assertIn("matchList-filter-competition=7562", server.HOKEJ_URL)
+        self.assertIn("matchList-filter-team=823", server.HOKEJ_URL)
+
     def test_uses_official_schedule_when_hokej_schedule_is_blocked(self):
         fallback = {
             "state": "scheduled", "home_code": "TRI", "away_code": "LIT",
