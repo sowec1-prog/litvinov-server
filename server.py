@@ -25,12 +25,62 @@ STANDINGS_URL = "https://www.hcverva.cz/standings/MUZ"
 # Oficiální klubový rozpis je záloha pro případ, kdy hokej.cz po zápase
 # ještě nezveřejní další termín ve svém seznamu.
 VERVA_MATCHES_URL = "https://www.hcverva.cz/matches/MUZ?season=2027"
-# Ověřený odkaz z textového přenosu Hokej.cz pro nejbližší utkání. HTML
-# /on-line stránka sama načítá níže používaný veřejný krátký JSON; token v URL
-# není potřeba ani se neukládá. Záznam je svázaný s datem a dvojicí týmů.
+# Kompletní rozpis ELH 2026/27 pro Litvínov, vyexportovaný z veřejných odkazů
+# Hokej.cz. Je to záloha pro Render: pokud cloudová IP nedostane HTML rozpisu,
+# známé ID stále otevře veřejný krátký JSON textového přenosu na S3.
 KNOWN_TEXT_TRANSFER_IDS = {
-    ("2026-10-02", "trinec", "litvinov"): "2928297",
+    ("2026-09-16", "hc verva litvinov", "kometa"): "2928258",
+    ("2026-09-18", "hc verva litvinov", "pardubice"): "2928263",
+    ("2026-09-20", "vitkovice", "hc verva litvinov"): "2928275",
+    ("2026-09-25", "hc verva litvinov", "sparta"): "2928278",
+    ("2026-09-27", "motor cb", "hc verva litvinov"): "2928285",
+    ("2026-09-29", "hc verva litvinov", "liberec"): "2928292",
+    ("2026-10-02", "trinec", "hc verva litvinov"): "2928297",
     ("2026-10-04", "hc verva litvinov", "rytiri kladno"): "2928307",
+    ("2026-10-09", "hc verva litvinov", "olomouc"): "2928314",
+    ("2026-10-11", "ml.boleslav", "hc verva litvinov"): "2928319",
+    ("2026-10-15", "hc verva litvinov", "mountfield hk"): "2928329",
+    ("2026-10-18", "hc verva litvinov", "energie k.v."): "2928332",
+    ("2026-10-23", "hc verva litvinov", "hc skoda plzen"): "2928342",
+    ("2026-10-25", "hc verva litvinov", "kometa"): "2928349",
+    ("2026-10-27", "pardubice", "hc verva litvinov"): "2928355",
+    ("2026-10-30", "hc verva litvinov", "vitkovice"): "2928366",
+    ("2026-11-01", "sparta", "hc verva litvinov"): "2928369",
+    ("2026-11-13", "hc verva litvinov", "motor cb"): "2928376",
+    ("2026-11-15", "liberec", "hc verva litvinov"): "2928383",
+    ("2026-11-20", "hc verva litvinov", "trinec"): "2928388",
+    ("2026-11-22", "kladno", "hc verva litvinov"): "2928398",
+    ("2026-11-24", "olomouc", "hc verva litvinov"): "2928405",
+    ("2026-11-27", "hc verva litvinov", "ml.boleslav"): "2928410",
+    ("2026-11-29", "mountfield hk", "hc verva litvinov"): "2928420",
+    ("2026-12-04", "energie k.v.", "hc verva litvinov"): "2928423",
+    ("2026-12-06", "hc skoda plzen", "hc verva litvinov"): "2928433",
+    ("2026-12-18", "kometa", "hc verva litvinov"): "2928440",
+    ("2026-12-20", "hc verva litvinov", "pardubice"): "2928447",
+    ("2026-12-22", "vitkovice", "hc verva litvinov"): "2928457",
+    ("2026-12-26", "hc verva litvinov", "sparta"): "2928460",
+    ("2026-12-28", "motor cb", "hc verva litvinov"): "2928467",
+    ("2026-12-30", "hc verva litvinov", "liberec"): "2928474",
+    ("2027-01-03", "trinec", "hc verva litvinov"): "2928479",
+    ("2027-01-08", "hc verva litvinov", "kladno"): "2928489",
+    ("2027-01-10", "hc verva litvinov", "olomouc"): "2928496",
+    ("2027-01-15", "ml.boleslav", "hc verva litvinov"): "2928501",
+    ("2027-01-17", "hc verva litvinov", "mountfield hk"): "2928511",
+    ("2027-01-22", "energie k.v.", "hc verva litvinov"): "2928514",
+    ("2027-01-24", "hc verva litvinov", "hc skoda plzen"): "2928524",
+    ("2027-01-26", "kometa", "hc verva litvinov"): "2928531",
+    ("2027-01-29", "pardubice", "hc verva litvinov"): "2928538",
+    ("2027-01-31", "hc verva litvinov", "vitkovice"): "2928548",
+    ("2027-02-02", "sparta", "hc verva litvinov"): "2928551",
+    ("2027-02-05", "hc verva litvinov", "motor cb"): "2928558",
+    ("2027-02-07", "liberec", "hc verva litvinov"): "2928565",
+    ("2027-02-17", "hc verva litvinov", "trinec"): "2928570",
+    ("2027-02-19", "kladno", "hc verva litvinov"): "2928580",
+    ("2027-02-21", "olomouc", "hc verva litvinov"): "2928587",
+    ("2027-02-26", "hc verva litvinov", "ml.boleslav"): "2928592",
+    ("2027-02-28", "mountfield hk", "hc verva litvinov"): "2928602",
+    ("2027-03-02", "hc verva litvinov", "energie k.v."): "2928605",
+    ("2027-03-05", "hc skoda plzen", "hc verva litvinov"): "2928615",
 }
 ONLINE_URL = "https://s3-eu-west-1.amazonaws.com/hokej.cz/match/2026/short/{match_id}.json"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Litvinov scoreboard; contact: github.com/sowec1-prog/litvinov-server)"}
@@ -357,7 +407,20 @@ def known_text_transfer_id(match):
     start_date = datetime.fromtimestamp(start_epoch, ZoneInfo("Europe/Prague")).date().isoformat()
     home = odstran_diakritiku(match.get("home", "")).casefold()
     away = odstran_diakritiku(match.get("away", "")).casefold()
-    return KNOWN_TEXT_TRANSFER_IDS.get((start_date, home, away), "")
+    direct = KNOWN_TEXT_TRANSFER_IDS.get((start_date, home, away), "")
+    if direct:
+        return direct
+
+    # Klubový rozpis zkracuje názvy (např. „Litvínov“ místo „HC VERVA
+    # Litvínov“). Pro záložní cestu proto porovnáme i stabilní třípísmenné
+    # klubové kódy, ne pouze přesné názvy v textu.
+    home_code, away_code = club_team_code(match.get("home", "")), club_team_code(match.get("away", ""))
+    if not home_code or not away_code:
+        return ""
+    for (known_date, known_home, known_away), transfer_id in KNOWN_TEXT_TRANSFER_IDS.items():
+        if known_date == start_date and home_code == club_team_code(known_home) and away_code == club_team_code(known_away):
+            return transfer_id
+    return ""
 
 
 def parse_verva_next_match(html_text):

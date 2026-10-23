@@ -90,6 +90,11 @@ class ServerCacheTests(unittest.TestCase):
         match = server.parse_verva_next_match(html)
         self.assertEqual(match["away_display"], "Mountfield HK")
 
+    def test_uses_registered_text_transfer_id_for_litvinov_plzen(self):
+        start = datetime(2026, 10, 23, 17, 30, tzinfo=ZoneInfo("Europe/Prague"))
+        match = {"match_start_epoch": int(start.timestamp()), "home": "HC VERVA Litvínov", "away": "HC ŠKODA Plzeň"}
+        self.assertEqual(server.known_text_transfer_id(match), "2928342")
+
     def test_hokej_schedule_url_is_canonical_and_skips_redirect(self):
         self.assertIn("matchList-filter-season=2026", server.HOKEJ_URL)
         self.assertIn("matchList-filter-competition=7562", server.HOKEJ_URL)
