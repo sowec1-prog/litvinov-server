@@ -311,6 +311,19 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(payload["table_position"], 4)
         self.assertEqual(payload["status_text"], "27. 10. 19:00")
 
+    def test_remote_firmware_manifest_is_channel_scoped_and_version_aware(self):
+        manifest = {"channels": {"sparta": {"version": "1.3.0", "url": "https://example.invalid/sparta.bin", "sha256": "a" * 64}}}
+        with patch("server.load_tft_firmware_manifest", return_value=manifest):
+            client = server.app.test_client()
+            current = client.get("/api/v1/tft/firmware?channel=sparta&current=1.3.0")
+            update = client.get("/api/v1/tft/firmware?channel=sparta&current=1.2.0")
+            missing = client.get("/api/v1/tft/firmware?channel=unknown")
+        self.assertEqual(current.status_code, 200)
+        self.assertFalse(current.get_json()["available"])
+        self.assertTrue(update.get_json()["available"])
+        self.assertEqual(update.get_json()["sha256"], "a" * 64)
+        self.assertEqual(missing.status_code, 404)
+
     def test_football_endpoint_selects_slavia_profile(self):
         expected = {"sport": "football", "home": {"code": "SKS"}, "table_position": 1}
         with patch("server.current_tft_slavia_payload", return_value=expected):

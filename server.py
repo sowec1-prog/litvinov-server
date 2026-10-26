@@ -16,6 +16,8 @@ import requests
 from bs4 import BeautifulSoup
 
 app = Flask(__name__)
+TFT_FIRMWARE_MANIFEST_PATH = Path(__file__).with_name("tft_firmware_manifest.json")
+
 
 # Hokej.cz rozlišuje velké `L` v parametru matchList. Bez explicitní sezóny
 # může vrátit archiv místo aktuálního rozpisu a nenajde se příští zápas.
@@ -1258,6 +1260,34 @@ def get_live_status():
         # výslovně neaktuální OLED payload místo HTTP 503, aby panel nezůstal
         # na obrazovce „Wi-Fi připojena“ a dál samostatně retryoval.
         return jsonify(manual_cue_payload(temporary_source_status()))
+
+
+def load_tft_firmware_manifest():
+    """Read the signed-by-SHA256 release catalog served to remote TFT devices."""
+    with TFT_FIRMWARE_MANIFEST_PATH.open(encoding="utf-8") as manifest_file:
+        return json.load(manifest_file)
+
+
+@app.route("/api/v1/tft/firmware")
+def get_tft_firmware_manifest():
+    channel = request.args.get("channel", "").strip().lower()
+    current = request.args.get("current", "").strip()
+    try:
+        release = load_tft_firmware_manifest().get("channels", {}).get(channel)
+    except (OSError, ValueError) as error:
+        app.logger.error("TFT firmware manifest unavailable: %s", error)
+        return jsonify({"error": "firmware_manifest_unavailable"}), 503
+    if not release:
+        return jsonify({"error": "unknown_firmware_channel"}), 404
+    required = {"version", "url", "sha256"}
+    if not required <= release.keys() or not re.fullmatch(r"[0-9a-f]{64}", release["sha256"]):
+        app.logger.error("invalid TFT firmware manifest entry for %s", channel)
+        return jsonify({"error": "invalid_firmware_manifest"}), 503
+    return jsonify({
+        "api_version": 1, "channel": channel, "current_version": current,
+        "available": current != release["version"],
+        "version": release["version"], "url": release["url"], "sha256": release["sha256"],
+    })
 
 
 @app.route("/api/v1/sport/hockey")
