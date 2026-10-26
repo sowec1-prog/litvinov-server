@@ -946,11 +946,14 @@ CHANCE_STANDINGS_URL = "https://www.chanceliga.cz/tabulka/2027/aktualni?id_stage
 FOOTBALL_CACHE_SECONDS = 300
 _last_tft_football_payload = None
 _last_tft_football_refresh = 0.0
+_last_tft_slavia_payload = None
+_last_tft_slavia_refresh = 0.0
 _last_tft_hockey_payload = None
 _last_tft_hockey_refresh = 0.0
 _tft_hockey_refresh_inflight = False
 _tft_hockey_cache_lock = threading.Lock()
 _tft_football_refresh_inflight = False
+_tft_slavia_refresh_inflight = False
 _tft_football_cache_lock = threading.Lock()
 
 
@@ -1009,6 +1012,73 @@ def current_tft_hockey_payload():
         payload = dict(_last_tft_hockey_payload or build_tft_hockey_payload(_last_good_status or temporary_source_status()))
     payload["cached"] = True
     return payload
+SLAVIA_MATCHES_URL = "https://www.slavia.cz/cze/matches/1?season=2027&type=future"
+FOOTBALL_TEAM_CODES = {
+    "AC Sparta Praha": "SPA", "SK Slavia Praha": "SKS", "FC Zbrojovka Brno": "ZBR",
+    "FC Baník Ostrava": "FCB", "FK Pardubice": "FKP", "Bohemians Praha 1905": "BOH",
+    "FC Viktoria Plzeň": "PLZ", "FK Mladá Boleslav": "MBL", "FK Teplice": "TEP",
+    "FK Jablonec": "FKJ", "FC Slovan Liberec": "LIB", "FC Hradec Králové": "HKR",
+    "1.FC Slovácko": "FCS", "SK Sigma Olomouc": "SIG", "FC Zlín": "FCZ",
+}
+
+
+def football_code(team_name):
+    candidate = str(team_name).strip()
+    if candidate in FOOTBALL_TEAM_CODES:
+        return FOOTBALL_TEAM_CODES[candidate]
+    for official_name, code in FOOTBALL_TEAM_CODES.items():
+        if official_name in candidate:
+            return code
+    return "OPP"
+
+
+def football_display_name(team_name):
+    candidate = str(team_name).strip()
+    for official_name in FOOTBALL_TEAM_CODES:
+        if official_name in candidate:
+            return official_name
+    return candidate
+
+
+def chance_team_table_position(standings_page, club_path):
+    for row in re.findall(r"<tr[^>]*>.*?</tr>", standings_page, flags=re.IGNORECASE | re.DOTALL):
+        if club_path not in row.lower() or 'class="position">' not in row:
+            continue
+        value = row.split('class="position">', 1)[1].split("</td>", 1)[0].strip()
+        if value.isdigit():
+            return int(value)
+    raise ValueError("Chance Liga standings did not contain requested club")
+
+
+def build_tft_slavia_payload(matches_page, standings_page, now_epoch=None):
+    """TFT football contract from the official Slavia schedule and Chance Liga table."""
+    now_epoch = now_epoch or int(time.time())
+    soup = BeautifulSoup(matches_page, "html.parser")
+    card = soup.select_one("li.match-card.match-card-future")
+    if card is None:
+        raise ValueError("Slavia official schedule did not contain a future match")
+    metadata = card.select_one(".match-card-metadata")
+    competition = metadata.find("span").get_text(" ", strip=True) if metadata else "Fotbal"
+    times = card.select(".match-card-metadata-timeline time")
+    if len(times) < 2:
+        raise ValueError("Slavia official schedule did not contain date and time")
+    start = datetime.strptime(f"{times[0].get('datetime')} {times[1].get('datetime')}", "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo("Europe/Prague"))
+    start_epoch = int(start.timestamp())
+    teams = [node.get_text(" ", strip=True) for node in card.select(".match-card-teams h2")]
+    if len(teams) < 2:
+        raise ValueError("Slavia official schedule did not contain both teams")
+    home_name, away_name = (football_display_name(teams[0]), football_display_name(teams[1]))
+    home_code, away_code = football_code(home_name), football_code(away_name)
+    return {
+        "api_version": 1, "sport": "football",
+        "state": "scheduled" if now_epoch < start_epoch else "finished",
+        "competition": competition, "home": {"code": home_code, "name": home_name, "logo": home_code.lower()},
+        "away": {"code": away_code, "name": away_name, "logo": away_code.lower()},
+        "score_home": 0, "score_away": 0, "status_text": start.strftime("%d. %m. %H:%M"),
+        "match_start_epoch": start_epoch, "server_epoch": now_epoch,
+        "table_position": chance_team_table_position(standings_page, "/klub/5-sk-slavia-praha"),
+        "timezone": "Europe/Prague", "source": "SK Slavia Praha + Chance Liga",
+    }
 
 
 def chance_sparta_table_position(standings_page):
@@ -1095,6 +1165,44 @@ def current_tft_football_payload():
     payload["cached"] = True
     return payload
 
+def _refresh_tft_slavia_payload():
+    global _last_tft_slavia_payload, _last_tft_slavia_refresh, _tft_slavia_refresh_inflight
+    try:
+        payload = build_tft_slavia_payload(request_text(SLAVIA_MATCHES_URL), request_text(CHANCE_STANDINGS_URL))
+        payload["cached"] = False
+        with _tft_football_cache_lock:
+            _last_tft_slavia_payload = payload
+    except (requests.RequestException, ValueError) as error:
+        app.logger.warning("Slavia football source failed: %s", error)
+    finally:
+        with _tft_football_cache_lock:
+            _last_tft_slavia_refresh = time.monotonic()
+            _tft_slavia_refresh_inflight = False
+
+
+def _initial_tft_slavia_payload():
+    now = int(time.time())
+    return {
+        "api_version": 1, "sport": "football", "state": "scheduled", "competition": "Chance Liga",
+        "home": {"code": "SKS", "name": "SK Slavia Praha", "logo": "slavia"},
+        "away": {"code": "?", "name": "Načítám", "logo": ""},
+        "score_home": 0, "score_away": 0, "status_text": "NACITAM FOTBAL",
+        "match_start_epoch": 0, "server_epoch": now, "table_position": 0,
+        "timezone": "Europe/Prague", "source": "litvinov-server", "cached": True,
+    }
+
+
+def current_tft_slavia_payload():
+    global _tft_slavia_refresh_inflight
+    with _tft_football_cache_lock:
+        if not _tft_slavia_refresh_inflight and time.monotonic() - _last_tft_slavia_refresh >= FOOTBALL_CACHE_SECONDS:
+            _tft_slavia_refresh_inflight = True
+            threading.Thread(target=_refresh_tft_slavia_payload, daemon=True).start()
+        payload = dict(_last_tft_slavia_payload or _initial_tft_slavia_payload())
+    payload["cached"] = True
+    return payload
+
+
 def domov():
     return "HC Verva Hokej Server bezi!"
 
@@ -1159,8 +1267,11 @@ def get_tft_hockey_status():
 
 @app.route("/api/v1/sport/football")
 def get_tft_football_status():
+    team = request.args.get("team", "SPA").upper()
+    if team not in {"SPA", "SKS"}:
+        return jsonify({"error": "unsupported_team", "supported_teams": ["SPA", "SKS"]}), 400
     try:
-        return jsonify(current_tft_football_payload())
+        return jsonify(current_tft_slavia_payload() if team == "SKS" else current_tft_football_payload())
     except (requests.RequestException, ValueError) as error:
         app.logger.warning("TFT football status failed: %s", error)
         return jsonify({"error": "football_source_unavailable"}), 503

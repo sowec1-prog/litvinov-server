@@ -302,6 +302,25 @@ class ServerCacheTests(unittest.TestCase):
             payload = server.current_tft_hockey_payload()
         self.assertEqual(payload["sport"], "hockey")
         self.assertTrue(payload["cached"])
+    def test_builds_slavia_football_payload_and_table_position(self):
+        page = '''<li class="match-card match-card-future"><div class="match-card-metadata"><span class="font-bold">MOL Cup 2026/27</span><div class="match-card-metadata-timeline"><time datetime="2026-10-27">27. 10. 2026</time><time datetime="19:00">19:00</time></div></div><div class="match-card-teams"><h2>SK Slavia Praha</h2><h2>FC Zbrojovka Brno</h2></div></li>'''
+        standings = '''<table><tr class="position4"><td class="position">4</td><td><a href="/klub/5-sk-slavia-praha">SK Slavia Praha</a></td></tr></table>'''
+        payload = server.build_tft_slavia_payload(page, standings, now_epoch=1793120000)
+        self.assertEqual(payload["home"]["code"], "SKS")
+        self.assertEqual(payload["away"]["code"], "ZBR")
+        self.assertEqual(payload["table_position"], 4)
+        self.assertEqual(payload["status_text"], "27. 10. 19:00")
+
+    def test_football_endpoint_selects_slavia_profile(self):
+        expected = {"sport": "football", "home": {"code": "SKS"}, "table_position": 1}
+        with patch("server.current_tft_slavia_payload", return_value=expected):
+            response = server.app.test_client().get("/api/v1/sport/football?team=SKS")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["home"]["code"], "SKS")
+
+    def test_football_endpoint_rejects_unknown_profile(self):
+        response = server.app.test_client().get("/api/v1/sport/football?team=UNKNOWN")
+        self.assertEqual(response.status_code, 400)
 
 
 if __name__ == "__main__":
