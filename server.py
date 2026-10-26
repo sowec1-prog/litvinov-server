@@ -5,6 +5,7 @@ import json
 import os
 import re
 import secrets
+import threading
 import time
 import unicodedata
 from datetime import datetime, timedelta
@@ -945,6 +946,12 @@ CHANCE_STANDINGS_URL = "https://www.chanceliga.cz/tabulka/2027/aktualni?id_stage
 FOOTBALL_CACHE_SECONDS = 300
 _last_tft_football_payload = None
 _last_tft_football_refresh = 0.0
+_last_tft_hockey_payload = None
+_last_tft_hockey_refresh = 0.0
+_tft_hockey_refresh_inflight = False
+_tft_hockey_cache_lock = threading.Lock()
+_tft_football_refresh_inflight = False
+_tft_football_cache_lock = threading.Lock()
 
 
 def build_tft_hockey_payload(upstream):
@@ -975,6 +982,33 @@ def build_tft_hockey_payload(upstream):
         "audio_cue": cue, "goal_side": goal_side, "timezone": "Europe/Prague",
         "source": "litvinov-server",
     }
+
+
+def _refresh_tft_hockey_payload():
+    global _last_tft_hockey_payload, _last_tft_hockey_refresh, _tft_hockey_refresh_inflight, _last_good_status
+    try:
+        _last_good_status = add_table_position(stahni_live_stav())
+        payload = build_tft_hockey_payload(_last_good_status)
+        payload["cached"] = False
+        with _tft_hockey_cache_lock:
+            _last_tft_hockey_payload = payload
+    except (requests.RequestException, ValueError) as error:
+        app.logger.warning("TFT hockey source failed: %s", error)
+    finally:
+        with _tft_hockey_cache_lock:
+            _last_tft_hockey_refresh = time.monotonic()
+            _tft_hockey_refresh_inflight = False
+
+
+def current_tft_hockey_payload():
+    global _tft_hockey_refresh_inflight
+    with _tft_hockey_cache_lock:
+        if not _tft_hockey_refresh_inflight and time.monotonic() - _last_tft_hockey_refresh >= 30:
+            _tft_hockey_refresh_inflight = True
+            threading.Thread(target=_refresh_tft_hockey_payload, daemon=True).start()
+        payload = dict(_last_tft_hockey_payload or build_tft_hockey_payload(_last_good_status or temporary_source_status()))
+    payload["cached"] = True
+    return payload
 
 
 def chance_sparta_table_position(standings_page):
@@ -1024,23 +1058,41 @@ def build_tft_football_payload(official_page, standings_page, now_epoch=None):
     }
 
 
-def current_tft_football_payload():
-    global _last_tft_football_payload, _last_tft_football_refresh
-    if _last_tft_football_payload and time.monotonic() - _last_tft_football_refresh < FOOTBALL_CACHE_SECONDS:
-        cached = dict(_last_tft_football_payload)
-        cached["cached"] = True
-        return cached
+def _refresh_tft_football_payload():
+    global _last_tft_football_payload, _last_tft_football_refresh, _tft_football_refresh_inflight
     try:
         payload = build_tft_football_payload(request_text(SPARTA_CALENDAR_URL), request_text(CHANCE_STANDINGS_URL))
         payload["cached"] = False
-        _last_tft_football_payload = payload
-        _last_tft_football_refresh = time.monotonic()
+        with _tft_football_cache_lock:
+            _last_tft_football_payload = payload
     except (requests.RequestException, ValueError) as error:
         app.logger.warning("football source failed: %s", error)
-        if _last_tft_football_payload is None:
-            raise
-        payload = dict(_last_tft_football_payload)
-        payload["cached"] = True
+    finally:
+        with _tft_football_cache_lock:
+            _last_tft_football_refresh = time.monotonic()
+            _tft_football_refresh_inflight = False
+
+
+def _initial_tft_football_payload():
+    now = int(time.time())
+    return {
+        "api_version": 1, "sport": "football", "state": "scheduled", "competition": "Chance Liga",
+        "home": {"code": "SPA", "name": "AC Sparta Praha", "logo": "sparta"},
+        "away": {"code": "?", "name": "Načítám", "logo": ""},
+        "score_home": 0, "score_away": 0, "status_text": "NACITAM FOTBAL",
+        "match_start_epoch": 0, "server_epoch": now, "table_position": 0,
+        "timezone": "Europe/Prague", "source": "litvinov-server", "cached": True,
+    }
+
+
+def current_tft_football_payload():
+    global _tft_football_refresh_inflight
+    with _tft_football_cache_lock:
+        if not _tft_football_refresh_inflight and time.monotonic() - _last_tft_football_refresh >= FOOTBALL_CACHE_SECONDS:
+            _tft_football_refresh_inflight = True
+            threading.Thread(target=_refresh_tft_football_payload, daemon=True).start()
+        payload = dict(_last_tft_football_payload or _initial_tft_football_payload())
+    payload["cached"] = True
     return payload
 
 def domov():
@@ -1102,16 +1154,7 @@ def get_live_status():
 
 @app.route("/api/v1/sport/hockey")
 def get_tft_hockey_status():
-    global _last_good_status
-    try:
-        _last_good_status = add_table_position(stahni_live_stav())
-        payload = build_tft_hockey_payload(_last_good_status)
-        payload["cached"] = False
-    except (requests.RequestException, ValueError) as error:
-        app.logger.warning("TFT hockey status failed: %s", error)
-        payload = build_tft_hockey_payload(_last_good_status or temporary_source_status())
-        payload["cached"] = True
-    return jsonify(payload)
+    return jsonify(current_tft_hockey_payload())
 
 
 @app.route("/api/v1/sport/football")

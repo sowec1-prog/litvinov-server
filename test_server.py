@@ -285,6 +285,23 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(payload["table_position"], 2)
         self.assertEqual(payload["status_text"], "28. 10. 18:30")
         self.assertEqual(payload["away"]["code"], "FCB")
+    def test_tft_football_returns_cached_payload_without_waiting_for_upstream(self):
+        server._last_tft_football_payload = None
+        server._last_tft_football_refresh = 0.0
+        server._tft_football_refresh_inflight = False
+        with patch("server.threading.Thread"):
+            payload = server.current_tft_football_payload()
+        self.assertEqual(payload["sport"], "football")
+        self.assertTrue(payload["cached"])
+        self.assertEqual(payload["status_text"], "NACITAM FOTBAL")
+    def test_tft_hockey_returns_cached_payload_without_waiting_for_upstream(self):
+        server._last_tft_hockey_payload = None
+        server._last_tft_hockey_refresh = 0.0
+        server._tft_hockey_refresh_inflight = False
+        with patch("server.threading.Thread"):
+            payload = server.current_tft_hockey_payload()
+        self.assertEqual(payload["sport"], "hockey")
+        self.assertTrue(payload["cached"])
 
 
 if __name__ == "__main__":
