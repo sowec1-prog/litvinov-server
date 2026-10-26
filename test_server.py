@@ -260,6 +260,31 @@ class ServerCacheTests(unittest.TestCase):
         start = datetime(2026, 10, 4, 17, 30, tzinfo=ZoneInfo("Europe/Prague"))
         match = {"match_start_epoch": int(start.timestamp()), "home": "HC VERVA Litvínov", "away": "Rytíři Kladno"}
         self.assertEqual(server.known_text_transfer_id(match), "2928307")
+    def test_tft_hockey_endpoint_contract_is_normalized_from_existing_live_payload(self):
+        payload = server.build_tft_hockey_payload({
+            "state": "live", "home_code": "LIT", "away_code": "KOM",
+            "home_display": "HC VERVA Litvinov", "away_display": "Kometa Brno",
+            "score_home": 3, "score_away": 2, "game_clock": "2. tretina 11:45",
+            "match_start_epoch": 1700000000, "server_epoch": 1700000100,
+            "table_position": 5, "event_id": "goal-42", "audio_cue": "lit_goal",
+        })
+        self.assertEqual(payload["sport"], "hockey")
+        self.assertEqual(payload["home"]["code"], "LIT")
+        self.assertEqual(payload["away"]["code"], "KOM")
+        self.assertEqual(payload["status_text"], "2. tretina 11:45")
+        self.assertEqual(payload["goal_side"], "home")
+
+    def test_chance_sparta_table_position_reads_official_row_only(self):
+        html = '''<table><tr class="position1"><td class="position">1</td><td>Other</td></tr>
+        <tr class="position2"><td class="position">2</td><td><a href="/klub/2-ac-sparta-praha">AC Sparta Praha</a></td></tr></table>'''
+        self.assertEqual(server.chance_sparta_table_position(html), 2)
+    def test_builds_tft_football_payload_with_czech_local_time(self):
+        calendar = r'''{\"match\":{\"state\":\"upcoming\",\"start\":\"2026-10-28T17:30:00Z\",\"home\":true},\"opponent\":{\"name\":\"FC Baník Ostrava\",\"shortName\":\"FCB\"},\"league\":{\"name\":\"MOL Cup\"}}'''
+        standings = '''<table><tr class="position2"><td class="position">2</td><td><a href="/klub/2-ac-sparta-praha">AC Sparta Praha</a></td></tr></table>'''
+        payload = server.build_tft_football_payload(calendar, standings, now_epoch=1793200000)
+        self.assertEqual(payload["table_position"], 2)
+        self.assertEqual(payload["status_text"], "28. 10. 18:30")
+        self.assertEqual(payload["away"]["code"], "FCB")
 
 
 if __name__ == "__main__":

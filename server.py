@@ -940,7 +940,109 @@ def stahni_live_stav():
     return extract_live_state(online, match, detail_html)
 
 
-@app.route("/")
+SPARTA_CALENDAR_URL = "https://sparta.cz/en/zapasy/1-muzi-a/2026-2027/kalendar"
+CHANCE_STANDINGS_URL = "https://www.chanceliga.cz/tabulka/2027/aktualni?id_stage=1"
+FOOTBALL_CACHE_SECONDS = 300
+_last_tft_football_payload = None
+_last_tft_football_refresh = 0.0
+
+
+def build_tft_hockey_payload(upstream):
+    """TFT-only JSON contract derived from the existing public hockey feed."""
+    home_code = str(upstream.get("home_code", "LIT"))
+    away_code = str(upstream.get("away_code", "?"))
+    cue = str(upstream.get("audio_cue") or "")
+    goal_side = str(upstream.get("goal_side") or upstream.get("goal_team") or "")
+    if goal_side not in {"home", "away"}:
+        lit_is_home = home_code.upper() == "LIT"
+        if cue == "lit_goal":
+            goal_side = "home" if lit_is_home else "away"
+        elif cue == "conceded_goal":
+            goal_side = "away" if lit_is_home else "home"
+    return {
+        "api_version": 1, "sport": "hockey",
+        "state": str(upstream.get("state", "scheduled")),
+        "competition": "Tipsport extraliga",
+        "home": {"code": home_code, "name": upstream.get("home_display") or home_code, "logo": home_code.lower()},
+        "away": {"code": away_code, "name": upstream.get("away_display") or away_code, "logo": away_code.lower()},
+        "score_home": int(upstream.get("score_home", 0) or 0),
+        "score_away": int(upstream.get("score_away", 0) or 0),
+        "status_text": str(upstream.get("game_clock") or ""),
+        "match_start_epoch": int(upstream.get("match_start_epoch", 0) or 0),
+        "server_epoch": int(upstream.get("server_epoch", time.time()) or time.time()),
+        "table_position": int(upstream.get("table_position", 0) or 0),
+        "event_id": str(upstream.get("event_id") or ""),
+        "audio_cue": cue, "goal_side": goal_side, "timezone": "Europe/Prague",
+        "source": "litvinov-server",
+    }
+
+
+def chance_sparta_table_position(standings_page):
+    """Read AC Sparta Praha's current position from official Chance Liga HTML."""
+    for row in re.findall(r"<tr[^>]*>.*?</tr>", standings_page, flags=re.IGNORECASE | re.DOTALL):
+        if "/klub/2-ac-sparta-praha" not in row.lower() or 'class="position">' not in row:
+            continue
+        value = row.split('class="position">', 1)[1].split("</td>", 1)[0].strip()
+        if value.isdigit():
+            return int(value)
+    raise ValueError("Chance Liga standings did not contain AC Sparta Praha")
+
+
+def build_tft_football_payload(official_page, standings_page, now_epoch=None):
+    """TFT football contract from official Sparta calendar + Chance Liga table."""
+    now_epoch = now_epoch or int(time.time())
+    decoded = official_page.replace(chr(92) + '"', '"')
+    matches, decoder = [], json.JSONDecoder()
+    for found in re.finditer(r'{"match":', decoded):
+        try:
+            item, _ = decoder.raw_decode(decoded[found.start():])
+        except json.JSONDecodeError:
+            continue
+        if {"match", "opponent", "league"} <= item.keys():
+            matches.append(item)
+    if not matches:
+        raise ValueError("Sparta official calendar did not contain matches")
+    future = [item for item in matches if datetime.fromisoformat(item["match"]["start"].replace("Z", "+00:00")).timestamp() >= now_epoch]
+    live = [item for item in matches if item["match"].get("state") == "live"]
+    selected = (live or sorted(future, key=lambda item: item["match"]["start"]) or matches)[0]
+    match, opponent, league = selected["match"], selected["opponent"], selected["league"]
+    start_epoch = int(datetime.fromisoformat(match["start"].replace("Z", "+00:00")).timestamp())
+    opponent_code = str(opponent.get("shortName") or "OPP")
+    opponent_payload = {"code": opponent_code, "name": str(opponent.get("name") or "Soupeř"), "logo": opponent_code.lower()}
+    home = bool(match.get("home"))
+    return {
+        "api_version": 1, "sport": "football",
+        "state": "live" if match.get("state") == "live" else ("scheduled" if now_epoch < start_epoch else "finished"),
+        "competition": str(league.get("name") or "Fotbal"),
+        "home": {"code": "SPA", "name": "AC Sparta Praha", "logo": "sparta"} if home else opponent_payload,
+        "away": opponent_payload if home else {"code": "SPA", "name": "AC Sparta Praha", "logo": "sparta"},
+        "score_home": 0, "score_away": 0,
+        "status_text": datetime.fromtimestamp(start_epoch, ZoneInfo("Europe/Prague")).strftime("%d. %m. %H:%M"),
+        "match_start_epoch": start_epoch, "server_epoch": now_epoch,
+        "table_position": chance_sparta_table_position(standings_page),
+        "timezone": "Europe/Prague", "source": "AC Sparta Praha + Chance Liga",
+    }
+
+
+def current_tft_football_payload():
+    global _last_tft_football_payload, _last_tft_football_refresh
+    if _last_tft_football_payload and time.monotonic() - _last_tft_football_refresh < FOOTBALL_CACHE_SECONDS:
+        cached = dict(_last_tft_football_payload)
+        cached["cached"] = True
+        return cached
+    try:
+        payload = build_tft_football_payload(request_text(SPARTA_CALENDAR_URL), request_text(CHANCE_STANDINGS_URL))
+        payload["cached"] = False
+        _last_tft_football_payload = payload
+        _last_tft_football_refresh = time.monotonic()
+    except (requests.RequestException, ValueError) as error:
+        app.logger.warning("football source failed: %s", error)
+        if _last_tft_football_payload is None:
+            raise
+        payload = dict(_last_tft_football_payload)
+        payload["cached"] = True
+    return payload
+
 def domov():
     return "HC Verva Hokej Server bezi!"
 
@@ -996,6 +1098,29 @@ def get_live_status():
         # výslovně neaktuální OLED payload místo HTTP 503, aby panel nezůstal
         # na obrazovce „Wi-Fi připojena“ a dál samostatně retryoval.
         return jsonify(manual_cue_payload(temporary_source_status()))
+
+
+@app.route("/api/v1/sport/hockey")
+def get_tft_hockey_status():
+    global _last_good_status
+    try:
+        _last_good_status = add_table_position(stahni_live_stav())
+        payload = build_tft_hockey_payload(_last_good_status)
+        payload["cached"] = False
+    except (requests.RequestException, ValueError) as error:
+        app.logger.warning("TFT hockey status failed: %s", error)
+        payload = build_tft_hockey_payload(_last_good_status or temporary_source_status())
+        payload["cached"] = True
+    return jsonify(payload)
+
+
+@app.route("/api/v1/sport/football")
+def get_tft_football_status():
+    try:
+        return jsonify(current_tft_football_payload())
+    except (requests.RequestException, ValueError) as error:
+        app.logger.warning("TFT football status failed: %s", error)
+        return jsonify({"error": "football_source_unavailable"}), 503
 
 
 if __name__ == "__main__":
