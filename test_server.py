@@ -297,8 +297,11 @@ class ServerCacheTests(unittest.TestCase):
             "score_home": 3, "score_away": 2, "game_clock": "2. tretina 11:45",
             "match_start_epoch": 1700000000, "server_epoch": 1700000100,
             "table_position": 5, "event_id": "goal-42", "audio_cue": "lit_goal",
+            "last_goal_scorer": "LIT pres. 5:4", "last_goal_code": "", "penalty_indicator": "TREST-KOM",
         })
         self.assertEqual(payload["sport"], "hockey")
+        self.assertEqual(payload["live_event"], "LIT pres. 5:4")
+        self.assertEqual(payload["penalty_indicator"], "TREST-KOM")
         self.assertEqual(payload["home"]["code"], "LIT")
         self.assertEqual(payload["away"]["code"], "KOM")
         self.assertEqual(payload["status_text"], "2. tretina 11:45")

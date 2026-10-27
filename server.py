@@ -1025,6 +1025,11 @@ def build_tft_hockey_payload(upstream):
         "match_start_epoch": int(upstream.get("match_start_epoch", 0) or 0),
         "server_epoch": int(upstream.get("server_epoch", time.time()) or time.time()),
         "table_position": int(upstream.get("table_position", 0) or 0),
+        # TFT přebírá stejnou rozhodnutou live událost jako OLED; neparsuje
+        # samostatně komentáře ani tresty.
+        "live_event": str(upstream.get("last_goal_scorer") or ""),
+        "live_event_code": str(upstream.get("last_goal_code") or ""),
+        "penalty_indicator": str(upstream.get("penalty_indicator") or ""),
         "event_id": str(upstream.get("event_id") or ""),
         "audio_cue": cue, "goal_side": goal_side, "timezone": "Europe/Prague",
         "source": "litvinov-server",
