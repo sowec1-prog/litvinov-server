@@ -272,6 +272,14 @@ class ServerCacheTests(unittest.TestCase):
         start = datetime(2026, 10, 4, 17, 30, tzinfo=ZoneInfo("Europe/Prague"))
         match = {"match_start_epoch": int(start.timestamp()), "home": "HC VERVA Litvínov", "away": "Rytíři Kladno"}
         self.assertEqual(server.known_text_transfer_id(match), "2928307")
+    def test_tft_hockey_payload_shows_countdown_when_match_starts_within_day(self):
+        payload = server.build_tft_hockey_payload({
+            "state": "scheduled", "home_code": "PCE", "away_code": "LIT",
+            "game_clock": "27. 10. 18:00", "match_start_epoch": 136_000,
+            "server_epoch": 100_000,
+        })
+        self.assertEqual(payload["status_text"], "ZACATEK ZA 10 H")
+
     def test_tft_hockey_endpoint_contract_is_normalized_from_existing_live_payload(self):
         payload = server.build_tft_hockey_payload({
             "state": "live", "home_code": "LIT", "away_code": "KOM",

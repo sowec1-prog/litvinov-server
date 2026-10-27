@@ -979,6 +979,23 @@ _tft_slavia_refresh_inflight = False
 _tft_football_cache_lock = threading.Lock()
 
 
+def scheduled_tft_status(upstream):
+    """Krátké odpočítávání pro TFT místo statického data v den zápasu."""
+    status_text = str(upstream.get("game_clock") or "")
+    if str(upstream.get("state", "scheduled")) != "scheduled":
+        return status_text
+    start_epoch = int(upstream.get("match_start_epoch", 0) or 0)
+    server_epoch = int(upstream.get("server_epoch", time.time()) or time.time())
+    remaining = start_epoch - server_epoch
+    if remaining < 0 or remaining > 24 * 60 * 60:
+        return status_text
+    hours = remaining // 3600
+    if hours:
+        return f"ZACATEK ZA {hours} H"
+    minutes = max(1, remaining // 60)
+    return f"ZACATEK ZA {minutes} MIN"
+
+
 def build_tft_hockey_payload(upstream):
     """TFT-only JSON contract derived from the existing public hockey feed."""
     home_code = str(upstream.get("home_code", "LIT"))
@@ -999,7 +1016,7 @@ def build_tft_hockey_payload(upstream):
         "away": {"code": away_code, "name": upstream.get("away_display") or away_code, "logo": away_code.lower()},
         "score_home": int(upstream.get("score_home", 0) or 0),
         "score_away": int(upstream.get("score_away", 0) or 0),
-        "status_text": str(upstream.get("game_clock") or ""),
+        "status_text": scheduled_tft_status(upstream),
         "match_start_epoch": int(upstream.get("match_start_epoch", 0) or 0),
         "server_epoch": int(upstream.get("server_epoch", time.time()) or time.time()),
         "table_position": int(upstream.get("table_position", 0) or 0),
