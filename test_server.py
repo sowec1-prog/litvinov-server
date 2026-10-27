@@ -112,6 +112,16 @@ class ServerCacheTests(unittest.TestCase):
         self.assertFalse(server.text_transfer_started(pregame))
         self.assertTrue(server.text_transfer_started(started))
 
+    def test_text_transfer_stays_live_after_start_marker_scrolls_out(self):
+        ongoing = {"comments": {"comment": [{
+            "time": "13:05",
+            "message": "Hra pokračuje ve středním pásmu.",
+        }, {
+            "time": "12:09",
+            "message": "Další střela míří vedle branky.",
+        }]}}
+        self.assertTrue(server.text_transfer_started(ongoing))
+
     def test_uses_official_schedule_when_hokej_schedule_is_blocked(self):
         fallback = {
             "state": "scheduled", "home_code": "TRI", "away_code": "LIT",

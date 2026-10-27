@@ -495,10 +495,15 @@ def text_transfer_started(online_json):
     Hokej.cz publikuje před utkáním články a statistiky v tomtéž JSONu. Jejich
     zmínky o prodloužení, gólech nebo trestech nejsou živý stav tohoto zápasu.
     """
-    return any(
+    comments = live_comments(online_json)
+    if any(
         "utkani prave zacalo" in odstran_diakritiku(message_text(item)).lower()
-        for item in live_comments(online_json)
-    )
+        for item in comments
+    ):
+        return True
+    # Hokej.cz drží jen omezené okno posledních komentářů. Po několika minutách
+    # startovní věta zmizí, ale reálný čas MM:SS je stále jednoznačný live signál.
+    return any(game_seconds(item.get("time")) > 0 for item in comments)
 
 
 def match_finished(online_json):
