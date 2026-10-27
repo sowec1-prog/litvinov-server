@@ -100,6 +100,18 @@ class ServerCacheTests(unittest.TestCase):
         self.assertIn("matchList-filter-competition=7562", server.HOKEJ_URL)
         self.assertIn("matchList-filter-team=823", server.HOKEJ_URL)
 
+    def test_text_transfer_starts_only_on_explicit_start_marker(self):
+        pregame = {"comments": {"comment": [{
+            "time": {"@attributes": {"period": "0"}},
+            "message": "Pardubice podlehly Kladnu 3:4 v prodloužení.",
+        }]}}
+        started = {"comments": {"comment": [{
+            "time": "00:01",
+            "message": "Utkání právě začalo.",
+        }]}}
+        self.assertFalse(server.text_transfer_started(pregame))
+        self.assertTrue(server.text_transfer_started(started))
+
     def test_uses_official_schedule_when_hokej_schedule_is_blocked(self):
         fallback = {
             "state": "scheduled", "home_code": "TRI", "away_code": "LIT",

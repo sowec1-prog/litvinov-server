@@ -489,6 +489,18 @@ def live_comments(online_json):
     return [item for item in comments if isinstance(item, dict)]
 
 
+def text_transfer_started(online_json):
+    """Text přenos je živý až po explicitním hlášení úvodního buly.
+
+    Hokej.cz publikuje před utkáním články a statistiky v tomtéž JSONu. Jejich
+    zmínky o prodloužení, gólech nebo trestech nejsou živý stav tohoto zápasu.
+    """
+    return any(
+        "utkani prave zacalo" in odstran_diakritiku(message_text(item)).lower()
+        for item in live_comments(online_json)
+    )
+
+
 def match_finished(online_json):
     """Vrací True jen po závěrečném hvizdu, ne po konci 1. nebo 2. třetiny."""
     comments = live_comments(online_json)
@@ -902,6 +914,10 @@ def fallback_from_club_schedule():
     if int(time.time()) < fallback["match_start_epoch"]:
         return fallback
     online = json.loads(request_text(ONLINE_URL.format(match_id=transfer_id)))
+    # Před úvodním buly obsahuje tentýž JSON pouze preview text; OLED musí
+    # zůstat u ověřeného naplánovaného stavu až do hlášky „Utkání právě začalo.“
+    if not text_transfer_started(online):
+        return fallback
     if match_finished(online):
         return finished_payload(fallback, online, final_whistle_epoch(online) or int(time.time()))
     return extract_live_state(online, fallback)
@@ -919,6 +935,10 @@ def stahni_live_stav():
     if not match["match_id"]:
         raise ValueError("Chybí ID zápasu pro textový přenos")
     online = json.loads(request_text(ONLINE_URL.format(**match)))
+    # Hokej.cz vkládá preview do stejného JSONu jako živý přenos. Dokud nepřijde
+    # přesná startovní hláška, nesmí se žádný jeho text vykreslit jako live stav.
+    if not text_transfer_started(online):
+        return match
     if match_finished(online):
         finished_at = final_whistle_epoch(online)
         now_epoch = int(datetime.now(ZoneInfo("Europe/Prague")).timestamp())
