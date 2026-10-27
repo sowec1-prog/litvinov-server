@@ -1,14 +1,14 @@
 {
   "channels": {
     "sparta": {
-      "version": "1.3.0",
-      "url": "https://raw.githubusercontent.com/sowec1-prog/litvinov-tft/main/releases/sparta/1.3.0.bin",
-      "sha256": "d80fdfb042d5489b4fba25b4ae48fc204ea0039617458226b7f3987d1dcb5740"
+      "version": "1.3.1",
+      "url": "https://raw.githubusercontent.com/sowec1-prog/litvinov-tft/main/releases/sparta/1.3.1.bin",
+      "sha256": "54d0701357e96e45473c191a93cd282ac2feef1fb706d5eae2b2b0e6074a0403"
     },
     "slavia": {
-      "version": "1.3.0",
-      "url": "https://raw.githubusercontent.com/sowec1-prog/litvinov-tft/main/releases/slavia/1.3.0.bin",
-      "sha256": "5f25a8b6b3692fa63c7ad13a78cdaf8fb52b9fbed45c9baa0249c8e98e8d9dfa"
+      "version": "1.3.1",
+      "url": "https://raw.githubusercontent.com/sowec1-prog/litvinov-tft/main/releases/slavia/1.3.1.bin",
+      "sha256": "af9dc28e68b15aa43c1d017eb5d5d3a22090ad73236992a37b8e2b3700e72ec5"
     }
   }
 }
