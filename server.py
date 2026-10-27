@@ -853,6 +853,16 @@ def extract_live_state(online_json, match, match_html=None):
         if code and code not in active_codes:
             active_codes.append(code)
     penalty_indicator = "TREST-" + "/".join(active_codes) if active_codes else ""
+    penalty_text = ""
+    if active:
+        first_penalty = active[0]
+        penalty_code = home_code if first_penalty["team"] == "home" else away_code
+        player_parts = odstran_diakritiku(str(first_penalty.get("player") or "hrac")).split()
+        player_name = player_parts[-1] if player_parts else "hrac"
+        penalty_prefix = power_play if power_play != "Plný počet 5:5" else "TREST"
+        penalty_text = f"{penalty_prefix} {penalty_code}:{player_name}"
+        if len(active) > 1:
+            penalty_text += f" +{len(active) - 1}"
     empty_net = empty_net_status(comments, match["home"], match["away"])
 
     audio_cue = ""
@@ -889,6 +899,7 @@ def extract_live_state(online_json, match, match_html=None):
         "power_play": power_play,
         "penalties": [{"team": p["team"], "player": p["player"]} for p in active],
         "penalty_indicator": penalty_indicator,
+        "penalty_text": penalty_text,
         "source": "hokej.cz textový přenos",
     }
 
@@ -1033,6 +1044,7 @@ def build_tft_hockey_payload(upstream):
         "live_event": live_event,
         "live_event_code": str(upstream.get("last_goal_code") or ""),
         "penalty_indicator": str(upstream.get("penalty_indicator") or ""),
+        "penalty_text": str(upstream.get("penalty_text") or ""),
         "event_id": str(upstream.get("event_id") or ""),
         "audio_cue": cue, "goal_side": goal_side, "timezone": "Europe/Prague",
         "source": "litvinov-server",
