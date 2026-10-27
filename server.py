@@ -1006,6 +1006,9 @@ def build_tft_hockey_payload(upstream):
     home_code = str(upstream.get("home_code", "LIT"))
     away_code = str(upstream.get("away_code", "?"))
     cue = str(upstream.get("audio_cue") or "")
+    live_event = str(upstream.get("last_goal_scorer") or "")
+    if upstream.get("intermission") and upstream.get("intermission_note"):
+        live_event = str(upstream["intermission_note"])
     goal_side = str(upstream.get("goal_side") or upstream.get("goal_team") or "")
     if goal_side not in {"home", "away"}:
         lit_is_home = home_code.upper() == "LIT"
@@ -1027,7 +1030,7 @@ def build_tft_hockey_payload(upstream):
         "table_position": int(upstream.get("table_position", 0) or 0),
         # TFT přebírá stejnou rozhodnutou live událost jako OLED; neparsuje
         # samostatně komentáře ani tresty.
-        "live_event": str(upstream.get("last_goal_scorer") or ""),
+        "live_event": live_event,
         "live_event_code": str(upstream.get("last_goal_code") or ""),
         "penalty_indicator": str(upstream.get("penalty_indicator") or ""),
         "event_id": str(upstream.get("event_id") or ""),

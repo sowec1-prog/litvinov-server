@@ -290,6 +290,13 @@ class ServerCacheTests(unittest.TestCase):
         })
         self.assertEqual(payload["status_text"], "ZACATEK ZA 10 H")
 
+    def test_tft_hockey_payload_uses_intermission_note_as_live_event(self):
+        payload = server.build_tft_hockey_payload({
+            "state": "live", "game_clock": "PRESTAVKA", "intermission": True,
+            "intermission_note": "PRESTAVKA DO 18:23", "last_goal_scorer": "LIT pres. 5:4",
+        })
+        self.assertEqual(payload["live_event"], "PRESTAVKA DO 18:23")
+
     def test_tft_hockey_endpoint_contract_is_normalized_from_existing_live_payload(self):
         payload = server.build_tft_hockey_payload({
             "state": "live", "home_code": "LIT", "away_code": "KOM",
