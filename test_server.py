@@ -327,6 +327,19 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(payload["table_position"], 2)
         self.assertEqual(payload["status_text"], "ZACATEK ZA 2 H")
         self.assertEqual(payload["away"]["code"], "FCB")
+    def test_tft_football_uses_playing_sparta_match_when_calendar_state_is_upcoming(self):
+        calendar = r'''<li><span>Playing</span><a href="/en/zapas/5909-ac-sparta-praha-fc-banik-ostrava/prubeh-zapasu">Match overview</a></li>
+        {\"match\":{\"id\":5909,\"state\":\"upcoming\",\"start\":\"2026-10-28T17:30:00Z\",\"home\":true,\"goalsHome\":0,\"goalsAway\":1},\"opponent\":{\"name\":\"FC Baník Ostrava\",\"shortName\":\"FCB\"},\"league\":{\"name\":\"MOL Cup\"}}
+        {\"match\":{\"id\":5910,\"state\":\"upcoming\",\"start\":\"2026-11-01T17:00:00Z\",\"home\":false,\"goalsHome\":0,\"goalsAway\":0},\"opponent\":{\"name\":\"Bohemians Praha 1905\",\"shortName\":\"BOH\"},\"league\":{\"name\":\"Chance LIGA\"}}'''
+        standings = '''<table><tr class="position2"><td class="position">2</td><td><a href="/klub/2-ac-sparta-praha">AC Sparta Praha</a></td></tr></table>'''
+        payload = server.build_tft_football_payload(calendar, standings, now_epoch=1793209200)
+        self.assertEqual(payload["state"], "live")
+        self.assertEqual(payload["home"]["code"], "SPA")
+        self.assertEqual(payload["away"]["code"], "FCB")
+        self.assertEqual(payload["score_home"], 0)
+        self.assertEqual(payload["score_away"], 1)
+        self.assertEqual(payload["status_text"], "LIVE")
+
     def test_tft_football_returns_cached_payload_without_waiting_for_upstream(self):
         server._last_tft_football_payload = None
         server._last_tft_football_refresh = 0.0

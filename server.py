@@ -1172,21 +1172,32 @@ def build_tft_football_payload(official_page, standings_page, now_epoch=None):
     if not matches:
         raise ValueError("Sparta official calendar did not contain matches")
     future = [item for item in matches if datetime.fromisoformat(item["match"]["start"].replace("Z", "+00:00")).timestamp() >= now_epoch]
-    live = [item for item in matches if item["match"].get("state") == "live"]
+    # Sparta's calendar can leave the JSON state as "upcoming" after kickoff,
+    # while the rendered match card says "Playing" and already has the score.
+    # Prefer that rendered in-progress card over the next scheduled fixture.
+    playing_ids = set()
+    soup = BeautifulSoup(official_page, "html.parser")
+    for link in soup.select('a[href*="/zapas/"]'):
+        card = link.find_parent("li")
+        match_id = re.search(r"/zapas/(\d+)-", str(link.get("href") or ""))
+        if card and match_id and "playing" in card.get_text(" ", strip=True).lower():
+            playing_ids.add(int(match_id.group(1)))
+    live = [item for item in matches if item["match"].get("state") == "live" or int(item["match"].get("id", 0) or 0) in playing_ids]
     selected = (live or sorted(future, key=lambda item: item["match"]["start"]) or matches)[0]
     match, opponent, league = selected["match"], selected["opponent"], selected["league"]
+    is_live = match.get("state") == "live" or int(match.get("id", 0) or 0) in playing_ids
     start_epoch = int(datetime.fromisoformat(match["start"].replace("Z", "+00:00")).timestamp())
     opponent_code = str(opponent.get("shortName") or "OPP")
     opponent_payload = {"code": opponent_code, "name": str(opponent.get("name") or "Soupeř"), "logo": opponent_code.lower()}
     home = bool(match.get("home"))
     return {
         "api_version": 1, "sport": "football",
-        "state": "live" if match.get("state") == "live" else ("scheduled" if now_epoch < start_epoch else "finished"),
+        "state": "live" if is_live else ("scheduled" if now_epoch < start_epoch else "finished"),
         "competition": str(league.get("name") or "Fotbal"),
         "home": {"code": "SPA", "name": "AC Sparta Praha", "logo": "sparta"} if home else opponent_payload,
         "away": opponent_payload if home else {"code": "SPA", "name": "AC Sparta Praha", "logo": "sparta"},
-        "score_home": 0, "score_away": 0,
-        "status_text": scheduled_tft_status({"state": "live" if match.get("state") == "live" else ("scheduled" if now_epoch < start_epoch else "finished"), "status_text": datetime.fromtimestamp(start_epoch, ZoneInfo("Europe/Prague")).strftime("%d. %m. %H:%M"), "match_start_epoch": start_epoch, "server_epoch": now_epoch}),
+        "score_home": int(match.get("goalsHome", 0) or 0), "score_away": int(match.get("goalsAway", 0) or 0),
+        "status_text": "LIVE" if is_live else scheduled_tft_status({"state": "scheduled" if now_epoch < start_epoch else "finished", "status_text": datetime.fromtimestamp(start_epoch, ZoneInfo("Europe/Prague")).strftime("%d. %m. %H:%M"), "match_start_epoch": start_epoch, "server_epoch": now_epoch}),
         "match_start_epoch": start_epoch, "server_epoch": now_epoch,
         "table_position": chance_sparta_table_position(standings_page),
         "timezone": "Europe/Prague", "source": "AC Sparta Praha + Chance Liga",
