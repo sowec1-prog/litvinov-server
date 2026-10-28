@@ -370,6 +370,14 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(payload["sport"], "football")
         self.assertTrue(payload["cached"])
         self.assertEqual(payload["status_text"], "NACITAM FOTBAL")
+    def test_tft_football_refreshes_live_events_after_thirty_seconds(self):
+        server._last_tft_football_payload = {"state": "live", "live_event": "1' KUBALA"}
+        server._last_tft_football_refresh = 100.0
+        server._tft_football_refresh_inflight = False
+        with patch("server.time.monotonic", return_value=131.0), patch("server.threading.Thread") as worker:
+            server.current_tft_football_payload()
+        worker.assert_called_once()
+
     def test_tft_hockey_returns_cached_payload_without_waiting_for_upstream(self):
         server._last_tft_hockey_payload = None
         server._last_tft_hockey_refresh = 0.0

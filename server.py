@@ -1273,10 +1273,12 @@ def _initial_tft_football_payload():
 def current_tft_football_payload():
     global _tft_football_refresh_inflight
     with _tft_football_cache_lock:
-        if not _tft_football_refresh_inflight and time.monotonic() - _last_tft_football_refresh >= FOOTBALL_CACHE_SECONDS:
+        current_payload = _last_tft_football_payload or _initial_tft_football_payload()
+        refresh_seconds = 30 if current_payload.get("state") == "live" else FOOTBALL_CACHE_SECONDS
+        if not _tft_football_refresh_inflight and time.monotonic() - _last_tft_football_refresh >= refresh_seconds:
             _tft_football_refresh_inflight = True
             threading.Thread(target=_refresh_tft_football_payload, daemon=True).start()
-        payload = dict(_last_tft_football_payload or _initial_tft_football_payload())
+        payload = dict(current_payload)
     payload["cached"] = True
     return payload
 
