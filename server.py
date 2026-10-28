@@ -997,7 +997,7 @@ _tft_football_cache_lock = threading.Lock()
 
 def scheduled_tft_status(upstream):
     """Krátké odpočítávání pro TFT místo statického data v den zápasu."""
-    status_text = str(upstream.get("game_clock") or "")
+    status_text = str(upstream.get("game_clock") or upstream.get("status_text") or "")
     if str(upstream.get("state", "scheduled")) != "scheduled":
         return status_text
     start_epoch = int(upstream.get("match_start_epoch", 0) or 0)
@@ -1138,7 +1138,8 @@ def build_tft_slavia_payload(matches_page, standings_page, now_epoch=None):
         "state": "scheduled" if now_epoch < start_epoch else "finished",
         "competition": competition, "home": {"code": home_code, "name": home_name, "logo": home_code.lower()},
         "away": {"code": away_code, "name": away_name, "logo": away_code.lower()},
-        "score_home": 0, "score_away": 0, "status_text": start.strftime("%d. %m. %H:%M"),
+        "score_home": 0, "score_away": 0,
+        "status_text": scheduled_tft_status({"state": "scheduled" if now_epoch < start_epoch else "finished", "status_text": start.strftime("%d. %m. %H:%M"), "match_start_epoch": start_epoch, "server_epoch": now_epoch}),
         "match_start_epoch": start_epoch, "server_epoch": now_epoch,
         "table_position": chance_team_table_position(standings_page, "/klub/5-sk-slavia-praha"),
         "timezone": "Europe/Prague", "source": "SK Slavia Praha + Chance Liga",
@@ -1185,7 +1186,7 @@ def build_tft_football_payload(official_page, standings_page, now_epoch=None):
         "home": {"code": "SPA", "name": "AC Sparta Praha", "logo": "sparta"} if home else opponent_payload,
         "away": opponent_payload if home else {"code": "SPA", "name": "AC Sparta Praha", "logo": "sparta"},
         "score_home": 0, "score_away": 0,
-        "status_text": datetime.fromtimestamp(start_epoch, ZoneInfo("Europe/Prague")).strftime("%d. %m. %H:%M"),
+        "status_text": scheduled_tft_status({"state": "live" if match.get("state") == "live" else ("scheduled" if now_epoch < start_epoch else "finished"), "status_text": datetime.fromtimestamp(start_epoch, ZoneInfo("Europe/Prague")).strftime("%d. %m. %H:%M"), "match_start_epoch": start_epoch, "server_epoch": now_epoch}),
         "match_start_epoch": start_epoch, "server_epoch": now_epoch,
         "table_position": chance_sparta_table_position(standings_page),
         "timezone": "Europe/Prague", "source": "AC Sparta Praha + Chance Liga",

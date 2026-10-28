@@ -325,7 +325,7 @@ class ServerCacheTests(unittest.TestCase):
         standings = '''<table><tr class="position2"><td class="position">2</td><td><a href="/klub/2-ac-sparta-praha">AC Sparta Praha</a></td></tr></table>'''
         payload = server.build_tft_football_payload(calendar, standings, now_epoch=1793200000)
         self.assertEqual(payload["table_position"], 2)
-        self.assertEqual(payload["status_text"], "28. 10. 18:30")
+        self.assertEqual(payload["status_text"], "ZACATEK ZA 2 H")
         self.assertEqual(payload["away"]["code"], "FCB")
     def test_tft_football_returns_cached_payload_without_waiting_for_upstream(self):
         server._last_tft_football_payload = None
@@ -351,7 +351,7 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(payload["home"]["code"], "SKS")
         self.assertEqual(payload["away"]["code"], "ZBR")
         self.assertEqual(payload["table_position"], 4)
-        self.assertEqual(payload["status_text"], "27. 10. 19:00")
+        self.assertEqual(payload["status_text"], "ZACATEK ZA 1 H")
 
     def test_remote_firmware_manifest_is_channel_scoped_and_version_aware(self):
         manifest = {"channels": {"sparta": {"version": "1.3.0", "url": "https://example.invalid/sparta.bin", "sha256": "a" * 64}}}
