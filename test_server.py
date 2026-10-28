@@ -340,6 +340,27 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(payload["score_away"], 1)
         self.assertEqual(payload["status_text"], "LIVE")
 
+    def test_tft_football_exposes_latest_live_event_from_sparta_detail(self):
+        calendar = r'''<li><span>Playing</span><a href="/en/zapas/5909-ac-sparta-praha-fc-banik-ostrava/prubeh-zapasu">Match overview</a></li>
+        {\"match\":{\"id\":5909,\"state\":\"upcoming\",\"start\":\"2026-10-28T17:30:00Z\",\"home\":true,\"goalsHome\":0,\"goalsAway\":1},\"opponent\":{\"name\":\"FC Baník Ostrava\",\"shortName\":\"FCB\"},\"league\":{\"name\":\"MOL Cup\"}}'''
+        detail = '''<div data-context="goal" data-minute="1"><div><time>1'</time><i data-icon="goal"></i><var aria-label="Score">0:1</var><span>Filip Kubala</span><span data-details="true">(Michal Kohút)</span></div></div>
+        <div data-context="goal" data-minute="11"><div><time>11'</time><i data-icon="var"></i><span>Neuznaný gól: Tobias Guddal</span></div></div>'''
+        standings = '''<table><tr class="position2"><td class="position">2</td><td><a href="/klub/2-ac-sparta-praha">AC Sparta Praha</a></td></tr></table>'''
+        payload = server.build_tft_football_payload(calendar, standings, now_epoch=1793209200, live_event_page=detail)
+        self.assertEqual(payload["live_event"], "11' NEUZN. GOL GUDDAL")
+        self.assertEqual(payload["live_event_code"], "VAR")
+
+    def test_tft_football_refresh_fetches_detail_for_playing_match(self):
+        calendar = r'''<li><span>Playing</span><a href="/en/zapas/5909-ac-sparta-praha-fc-banik-ostrava/prubeh-zapasu">Match overview</a></li>
+        {\"match\":{\"id\":5909,\"state\":\"upcoming\",\"start\":\"2026-10-28T17:30:00Z\",\"home\":true,\"goalsHome\":0,\"goalsAway\":1},\"opponent\":{\"name\":\"FC Baník Ostrava\",\"shortName\":\"FCB\"},\"league\":{\"name\":\"MOL Cup\"}}'''
+        detail = '''<div data-context="goal" data-minute="11"><div><time>11'</time><i data-icon="var"></i><span>Neuznaný gól: Tobias Guddal</span></div></div>'''
+        standings = '''<table><tr class="position2"><td class="position">2</td><td><a href="/klub/2-ac-sparta-praha">AC Sparta Praha</a></td></tr></table>'''
+        server._last_tft_football_payload = None
+        with patch("server.request_text", side_effect=[calendar, standings, detail]) as fetch:
+            server._refresh_tft_football_payload()
+        self.assertEqual(server._last_tft_football_payload["live_event"], "11' NEUZN. GOL GUDDAL")
+        self.assertIn("https://sparta.cz/cs/zapas/5909-ac-sparta-praha-fc-banik-ostrava/prubeh-zapasu", [call.args[0] for call in fetch.call_args_list])
+
     def test_tft_football_returns_cached_payload_without_waiting_for_upstream(self):
         server._last_tft_football_payload = None
         server._last_tft_football_refresh = 0.0

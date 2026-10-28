@@ -1157,7 +1157,32 @@ def chance_sparta_table_position(standings_page):
     raise ValueError("Chance Liga standings did not contain AC Sparta Praha")
 
 
-def build_tft_football_payload(official_page, standings_page, now_epoch=None):
+def sparta_live_event_from_detail(detail_page):
+    """Return the newest compact event from Sparta's official match timeline."""
+    if not detail_page:
+        return "", ""
+    events = BeautifulSoup(detail_page, "html.parser").select('[data-context="goal"][data-minute]')
+    if not events:
+        return "", ""
+    event = events[-1]
+    minute = str(event.get("data-minute") or "").strip()
+    primary = event.find("div", recursive=False)
+    icon = event.select_one("[data-icon]")
+    icon_name = str(icon.get("data-icon") or "") if icon else ""
+    label = primary.find("span", recursive=False) if primary else None
+    label_text = label.get_text(" ", strip=True) if label else ""
+    if icon_name == "var" or "neuznany gol" in odstran_diakritiku(label_text).lower():
+        player = odstran_diakritiku(label_text.split(":", 1)[-1]).strip().split()
+        return f"{minute}' NEUZN. GOL {player[-1].upper()}" if minute and player else "NEUZNANY GOL", "VAR"
+    player_parts = odstran_diakritiku(label_text).strip().split()
+    player = player_parts[-1].upper() if player_parts else "GOL"
+    assist = primary.select_one("[data-details]") if primary else None
+    assist_parts = odstran_diakritiku(assist.get_text(" ", strip=True)).strip("() ").split() if assist else []
+    suffix = f" ({assist_parts[-1].upper()})" if assist_parts else ""
+    return f"{minute}' {player}{suffix}" if minute else f"GOL {player}{suffix}", "GOAL"
+
+
+def build_tft_football_payload(official_page, standings_page, now_epoch=None, live_event_page=""):
     """TFT football contract from official Sparta calendar + Chance Liga table."""
     now_epoch = now_epoch or int(time.time())
     decoded = official_page.replace(chr(92) + '"', '"')
@@ -1190,6 +1215,7 @@ def build_tft_football_payload(official_page, standings_page, now_epoch=None):
     opponent_code = str(opponent.get("shortName") or "OPP")
     opponent_payload = {"code": opponent_code, "name": str(opponent.get("name") or "Soupeř"), "logo": opponent_code.lower()}
     home = bool(match.get("home"))
+    live_event, live_event_code = sparta_live_event_from_detail(live_event_page) if is_live else ("", "")
     return {
         "api_version": 1, "sport": "football",
         "state": "live" if is_live else ("scheduled" if now_epoch < start_epoch else "finished"),
@@ -1198,6 +1224,7 @@ def build_tft_football_payload(official_page, standings_page, now_epoch=None):
         "away": opponent_payload if home else {"code": "SPA", "name": "AC Sparta Praha", "logo": "sparta"},
         "score_home": int(match.get("goalsHome", 0) or 0), "score_away": int(match.get("goalsAway", 0) or 0),
         "status_text": "LIVE" if is_live else scheduled_tft_status({"state": "scheduled" if now_epoch < start_epoch else "finished", "status_text": datetime.fromtimestamp(start_epoch, ZoneInfo("Europe/Prague")).strftime("%d. %m. %H:%M"), "match_start_epoch": start_epoch, "server_epoch": now_epoch}),
+        "live_event": live_event, "live_event_code": live_event_code,
         "match_start_epoch": start_epoch, "server_epoch": now_epoch,
         "table_position": chance_sparta_table_position(standings_page),
         "timezone": "Europe/Prague", "source": "AC Sparta Praha + Chance Liga",
@@ -1207,7 +1234,19 @@ def build_tft_football_payload(official_page, standings_page, now_epoch=None):
 def _refresh_tft_football_payload():
     global _last_tft_football_payload, _last_tft_football_refresh, _tft_football_refresh_inflight
     try:
-        payload = build_tft_football_payload(request_text(SPARTA_CALENDAR_URL), request_text(CHANCE_STANDINGS_URL))
+        calendar_page = request_text(SPARTA_CALENDAR_URL)
+        standings_page = request_text(CHANCE_STANDINGS_URL)
+        live_event_page = ""
+        calendar_soup = BeautifulSoup(calendar_page, "html.parser")
+        for link in calendar_soup.select('a[href*="/zapas/"]'):
+            card = link.find_parent("li")
+            href = str(link.get("href") or "")
+            if not card or "playing" not in card.get_text(" ", strip=True).lower() or not href:
+                continue
+            live_url = ("https://sparta.cz" + href) if href.startswith("/") else href
+            live_event_page = request_text(live_url.replace("/en/", "/cs/", 1))
+            break
+        payload = build_tft_football_payload(calendar_page, standings_page, live_event_page=live_event_page)
         payload["cached"] = False
         with _tft_football_cache_lock:
             _last_tft_football_payload = payload
