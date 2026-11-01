@@ -1001,6 +1001,8 @@ def stahni_live_stav():
 SPARTA_CALENDAR_URL = "https://sparta.cz/en/zapasy/1-muzi-a/2026-2027/kalendar"
 CHANCE_STANDINGS_URL = "https://www.chanceliga.cz/tabulka/2027/aktualni?id_stage=1"
 FOOTBALL_CACHE_SECONDS = 300
+TFT_HOCKEY_LIVE_CACHE_SECONDS = 5
+TFT_HOCKEY_IDLE_CACHE_SECONDS = 30
 _last_tft_football_payload = None
 _last_tft_football_refresh = 0.0
 _last_tft_slavia_payload = None
@@ -1086,10 +1088,15 @@ def _refresh_tft_hockey_payload():
             _tft_hockey_refresh_inflight = False
 
 
+def tft_hockey_cache_seconds(payload):
+    return TFT_HOCKEY_LIVE_CACHE_SECONDS if payload and payload.get("state") == "live" else TFT_HOCKEY_IDLE_CACHE_SECONDS
+
+
 def current_tft_hockey_payload():
     global _tft_hockey_refresh_inflight
     with _tft_hockey_cache_lock:
-        if not _tft_hockey_refresh_inflight and time.monotonic() - _last_tft_hockey_refresh >= 30:
+        cached_payload = _last_tft_hockey_payload
+        if not _tft_hockey_refresh_inflight and time.monotonic() - _last_tft_hockey_refresh >= tft_hockey_cache_seconds(cached_payload):
             _tft_hockey_refresh_inflight = True
             threading.Thread(target=_refresh_tft_hockey_payload, daemon=True).start()
         payload = dict(_last_tft_hockey_payload or build_tft_hockey_payload(_last_good_status or temporary_source_status()))

@@ -309,6 +309,10 @@ class ServerCacheTests(unittest.TestCase):
         })
         self.assertEqual(payload["live_event"], "PRESTAVKA DO 18:23")
 
+    def test_tft_hockey_cache_refreshes_live_state_every_five_seconds(self):
+        self.assertEqual(server.tft_hockey_cache_seconds({"state": "live"}), 5)
+        self.assertEqual(server.tft_hockey_cache_seconds({"state": "scheduled"}), 30)
+
     def test_tft_hockey_endpoint_contract_is_normalized_from_existing_live_payload(self):
         payload = server.build_tft_hockey_payload({
             "state": "live", "home_code": "LIT", "away_code": "KOM",
