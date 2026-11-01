@@ -274,7 +274,7 @@ class ServerCacheTests(unittest.TestCase):
         )
         self.assertTrue(active)
         self.assertEqual(until, 0)
-        self.assertEqual(note, "PRESTAVKA: KABINY - PRASKLE PLEXISKLO U STRIDACKY")
+        self.assertEqual(note, "PRESTAVKA: PRASKLE PLEXI")
 
     def test_intermission_survives_newer_period_summary(self):
         summary = {"@attributes": {"score1": "2", "score2": "0"}, "time": {"@attributes": {"period": "1INT"}}, "details": [], "message": "Shrnutí první třetiny."}

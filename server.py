@@ -725,11 +725,12 @@ def parse_intermission(text):
     if "miri do kabin" in normalized:
         reason = re.search(r"duvod(?:em)?\s*(?:je|:)\s*(.+)", normalized, re.IGNORECASE)
         if reason:
-            # Jedna spodní řádka TFT při písmu 1 unese maximálně 50 ASCII znaků.
-            detail = reason.group(1).strip(" .!?:;").upper()[:30]
+            # Aktuální klient už umí i delší text malým písmem, ale server
+            # drží kompatibilní stručný řádek pro každou starší verzi TFT.
+            detail = reason.group(1).strip(" .!?:;").upper()[:13]
             if detail:
-                return True, 0, f"PRESTAVKA: KABINY - {detail}"
-        return True, 0, "PRESTAVKA: HRACI DO KABIN"
+                return True, 0, f"PRESTAVKA: {detail}"
+        return True, 0, "PRESTAVKA: KABINY"
     found = re.search(r"Dalsi tretina zacne priblizne v\s*(\d{1,2}):(\d{2})", normalized, re.IGNORECASE)
     if not found:
         return False, 0, ""
