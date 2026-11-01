@@ -719,7 +719,18 @@ def intermission_still_active(until_epoch, now_epoch):
 
 def parse_intermission(text):
     """Vrátí (je_přestávka, epoch_začátku_další_třetiny, stručný text pro OLED)."""
-    found = re.search(r"Dalsi tretina zacne priblizne v\s*(\d{1,2}):(\d{2})", odstran_diakritiku(text), re.IGNORECASE)
+    normalized = odstran_diakritiku(text).lower()
+    # Hokej.cz tuto událost posílá dříve než oznámení přesného času další třetiny.
+    # Přestávka má být vidět hned; epochu doplní pozdější komentář, pokud přijde.
+    if "miri do kabin" in normalized:
+        reason = re.search(r"duvod(?:em)?\s*(?:je|:)\s*(.+)", normalized, re.IGNORECASE)
+        if reason:
+            # Jedna spodní řádka TFT při písmu 1 unese maximálně 50 ASCII znaků.
+            detail = reason.group(1).strip(" .!?:;").upper()[:30]
+            if detail:
+                return True, 0, f"PRESTAVKA: KABINY - {detail}"
+        return True, 0, "PRESTAVKA: HRACI DO KABIN"
+    found = re.search(r"Dalsi tretina zacne priblizne v\s*(\d{1,2}):(\d{2})", normalized, re.IGNORECASE)
     if not found:
         return False, 0, ""
     now = datetime.now(ZoneInfo("Europe/Prague"))
@@ -755,7 +766,7 @@ def extract_live_state(online_json, match, match_html=None):
             if intermission:
                 break
     now_epoch = int(datetime.now(ZoneInfo("Europe/Prague")).timestamp())
-    if intermission and not intermission_still_active(intermission_until_epoch, now_epoch):
+    if intermission and intermission_until_epoch and not intermission_still_active(intermission_until_epoch, now_epoch):
         # Čas další třetiny je ověřený přímo z konce periody. Po jeho uplynutí
         # OLED nesmí zůstat na přestávce jen proto, že Hokej.cz komentář zpozdil.
         intermission, intermission_until_epoch, intermission_note = False, 0, ""

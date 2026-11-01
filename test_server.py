@@ -268,6 +268,14 @@ class ServerCacheTests(unittest.TestCase):
         self.assertEqual(note, "PRESTAVKA DO 18:23")
         self.assertEqual(datetime.fromtimestamp(until, ZoneInfo("Europe/Prague")).date().isoformat(), "2026-10-04")
 
+    def test_intermission_detects_players_heading_to_lockers(self):
+        active, until, note = server.parse_intermission(
+            "Hráči obou týmů míří do kabin! Důvodem je prasklé plexisklo u střídačky."
+        )
+        self.assertTrue(active)
+        self.assertEqual(until, 0)
+        self.assertEqual(note, "PRESTAVKA: KABINY - PRASKLE PLEXISKLO U STRIDACKY")
+
     def test_intermission_survives_newer_period_summary(self):
         summary = {"@attributes": {"score1": "2", "score2": "0"}, "time": {"@attributes": {"period": "1INT"}}, "details": [], "message": "Shrnutí první třetiny."}
         announcement = {"@attributes": {"score1": "2", "score2": "0"}, "time": {"@attributes": {"period": "1INT"}}, "details": [], "message": "Další třetina začne přibližně v 18:23."}
