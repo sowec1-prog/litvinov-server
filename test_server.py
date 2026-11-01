@@ -249,6 +249,10 @@ class ServerCacheTests(unittest.TestCase):
         self.assertTrue(server.overtime_active(comments))
         self.assertEqual(server.display_period_clock("60:01"), "00:01")
 
+    def test_pregame_history_mention_of_overtime_is_not_live_overtime(self):
+        comments = [{"time": "00:05", "message": "Soupeř minule získal bod po prodloužení."}]
+        self.assertFalse(server.overtime_active(comments))
+
     def test_converts_cumulative_live_clock_to_current_period_clock(self):
         self.assertEqual(server.display_period_clock("19:59"), "19:59")
         self.assertEqual(server.display_period_clock("20:01"), "00:01")

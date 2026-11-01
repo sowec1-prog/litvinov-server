@@ -702,12 +702,19 @@ def commercial_break_until_epoch(comments, now_epoch=None):
 
 
 def overtime_active(comments):
-    """Rozpozná vyhlášené nebo rozehrané prodloužení z veřejného přenosu."""
+    """Rozpozná skutečně rozehrané nebo právě vyhlášené prodloužení.
+
+    Starší preview komentáře často obsahují slovo „prodloužení“ v historii
+    předchozích zápasů; bez konce třetí periody nesmějí změnit live stav.
+    """
     for item in comments[:12]:
-        text = odstran_diakritiku(message_text(item)).lower()
-        if "ceka nas prodlouzeni" in text or "prodlouzeni" in text:
+        game_time = item.get("time")
+        if game_seconds(game_time) >= 60 * 60:
             return True
-        if game_seconds(item.get("time")) >= 60 * 60:
+        period = ""
+        if isinstance(game_time, dict):
+            period = str(game_time.get("@attributes", {}).get("period", ""))
+        if period == "3INT" and "prodlouzeni" in odstran_diakritiku(message_text(item)).lower():
             return True
     return False
 
