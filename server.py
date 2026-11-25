@@ -393,6 +393,7 @@ TEAM_CODES = {
     "litvinov": "LIT", "vitkovice": "VIT", "sparta": "SPA", "kometa": "KOM",
     "pardubice": "PCE", "motor cb": "CEB", "liberec": "LIB", "trinec": "TRI",
     "plzen": "PLZ", "kladno": "KLA", "olomouc": "OLO", "mlada boleslav": "MBL",
+    "ml.boleslav": "MBL", "ml boleslav": "MBL",
     "karlovy vary": "KVA", "energie kv": "KVA", "energie k.v.": "KVA", "mountfield": "MHK",
 }
 

@@ -90,6 +90,14 @@ class ServerCacheTests(unittest.TestCase):
         match = server.parse_verva_next_match(html)
         self.assertEqual(match["away_display"], "Mountfield HK")
 
+    def test_verva_fallback_maps_club_schedule_abbreviation_ml_boleslav_to_mbl_logo_code(self):
+        html = '''<table><tr class="u-clickable">
+          <td>1</td><td>27. 11. 2099</td><td>Extraliga</td>
+          <td>HC VERVA Litvínov</td><td>Ml.Boleslav</td><td>17:30</td>
+        </tr></table>'''
+        match = server.parse_verva_next_match(html)
+        self.assertEqual(match["away_code"], "MBL")
+
     def test_uses_registered_text_transfer_id_for_litvinov_plzen(self):
         start = datetime(2026, 10, 23, 17, 30, tzinfo=ZoneInfo("Europe/Prague"))
         match = {"match_start_epoch": int(start.timestamp()), "home": "HC VERVA Litvínov", "away": "HC ŠKODA Plzeň"}
