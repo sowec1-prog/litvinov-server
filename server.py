@@ -1410,6 +1410,19 @@ def load_tft_firmware_manifest():
         return json.load(manifest_file)
 
 
+def parse_firmware_version(value):
+    """Return a strict three-part semantic version tuple, or None if invalid."""
+    match = re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", value or "")
+    return tuple(int(part) for part in match.groups()) if match else None
+
+
+def is_firmware_update_available(release_version, current_version):
+    """Only offer a strictly newer release; never permit an OTA downgrade."""
+    release = parse_firmware_version(release_version)
+    current = parse_firmware_version(current_version)
+    return bool(release and current and release > current)
+
+
 @app.route("/api/v1/tft/firmware")
 def get_tft_firmware_manifest():
     channel = request.args.get("channel", "").strip().lower()
@@ -1427,7 +1440,7 @@ def get_tft_firmware_manifest():
         return jsonify({"error": "invalid_firmware_manifest"}), 503
     return jsonify({
         "api_version": 1, "channel": channel, "current_version": current,
-        "available": current != release["version"],
+        "available": is_firmware_update_available(release["version"], current),
         "version": release["version"], "url": release["url"], "sha256": release["sha256"],
     })
 

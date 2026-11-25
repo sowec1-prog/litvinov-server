@@ -424,12 +424,16 @@ class ServerCacheTests(unittest.TestCase):
         with patch("server.load_tft_firmware_manifest", return_value=manifest):
             client = server.app.test_client()
             current = client.get("/api/v1/tft/firmware?channel=sparta&current=1.3.0")
-            update = client.get("/api/v1/tft/firmware?channel=sparta&current=1.2.0")
+            older = client.get("/api/v1/tft/firmware?channel=sparta&current=1.2.9")
+            newer = client.get("/api/v1/tft/firmware?channel=sparta&current=1.3.1")
+            malformed = client.get("/api/v1/tft/firmware?channel=sparta&current=broken")
             missing = client.get("/api/v1/tft/firmware?channel=unknown")
         self.assertEqual(current.status_code, 200)
         self.assertFalse(current.get_json()["available"])
-        self.assertTrue(update.get_json()["available"])
-        self.assertEqual(update.get_json()["sha256"], "a" * 64)
+        self.assertTrue(older.get_json()["available"])
+        self.assertFalse(newer.get_json()["available"])
+        self.assertFalse(malformed.get_json()["available"])
+        self.assertEqual(older.get_json()["sha256"], "a" * 64)
         self.assertEqual(missing.status_code, 404)
 
     def test_football_endpoint_selects_slavia_profile(self):
